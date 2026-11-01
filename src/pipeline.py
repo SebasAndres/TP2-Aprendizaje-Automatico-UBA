@@ -1,14 +1,10 @@
-from src.data.preprocess import (
-    download_dataset,
-    preprocess_dataset,
-    split_dataset_dev_control
+from src.data import download_dataset, preprocess_dataset, split_dataset_dev_control
+from src.features import (
+    ClassicFeatureExtractor,
+    EmbeddingsExtractor,
+    AverageEmbeddingsExtractor,
 )
-from src.features.classic import ClassicFeatureExtractor
-from src.features.embeddings import EmbeddingsExtractor, AverageEmbeddingsExtractor
-from src.models.train import (
-    train_models,
-    save_models
-)
+from src.models import train_models, save_models
 
 if __name__ == '__main__':
 

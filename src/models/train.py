@@ -1,5 +1,8 @@
 from torch.utils.data import Dataset, DataLoader, random_split
-from src.constants import BATCH_SIZE
+from src.constants import BATCH_SIZE, TEST_RATIO
+from src.models.classic import train_classic_model
+from src.models.standard_rnn import train_standard_rnn_model
+from src.models.bidirectional_rnn import train_bidirectional_rnn_model
 
 def train_models(development_dataset: Dataset) -> dict[str, any]:
     """ 
@@ -7,7 +10,7 @@ def train_models(development_dataset: Dataset) -> dict[str, any]:
     Inicialmente probamos los mismos modelos para ambos problemas. 
     """
 
-    train_dataset, test_dataset = random_split(development_dataset, [])
+    train_dataset, test_dataset = random_split(development_dataset, [1-TEST_RATIO, TEST_RATIO])
 
     train_loader = DataLoader(
         dataset=train_dataset,
@@ -23,10 +26,14 @@ def train_models(development_dataset: Dataset) -> dict[str, any]:
     )
 
     # Acá para cada modelo posible entrenar (!)
+    classic_model = train_classic_model(train_loader, test_loader)
+    standard_rnn_model = train_standard_rnn_model(train_loader, test_loader)
+    bidirectional_rnn_model = train_bidirectional_rnn_model(train_loader, test_loader)
 
     return {
-        "modelo-1": None,
-        "...": None
+        "classic_model": classic_model,
+        "standard_rnn_model": standard_rnn_model,
+        "bidirectional_rnn_model": bidirectional_rnn_model
     }
 
 def save_models(models):

@@ -17,15 +17,12 @@ class TextDataset(Dataset):
     def __init__(
         self, 
         path: str,
-        feature_extractor: TextFeatureExtractor,
     ):
         self.path = path
         with gzip.open(self.path, mode="rt", encoding="utf-8") as f:
             self.data = f.read().splitlines()
         self.len = len(self.data)
-
         self.tokenizer = BertTokenizer.from_pretrained(EMBEDDINGS_MODEL)
-        self.feature_extractor = feature_extractor
 
     @abstractmethod
     def _expected_output(self, words: list[str], word_tokens: list[list[str]]):
@@ -49,6 +46,5 @@ class TextDataset(Dataset):
         words = self.data[idx].split()
         word_tokens = self._tokenize_words(words)
         tokens = [token for tokens in word_tokens for token in tokens]
-        x = self._extract_features(tokens)
         y = self._expected_output(words, word_tokens)
-        return x, y
+        return tokens, y

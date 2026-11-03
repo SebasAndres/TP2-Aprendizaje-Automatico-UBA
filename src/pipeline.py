@@ -22,14 +22,14 @@ if __name__ == '__main__':
             (
                 punctuation_dataset,
                 capitalization_dataset
-            ) = preprocess_dataset(feature_extractor)
+            ) = preprocess_dataset()
 
             for dataset in (capitalization_dataset, punctuation_dataset):
                 # 3
                 development_set, control_set = split_dataset_dev_control(dataset)
 
                 # 4
-                models = train_models(development_set)
+                models = train_models(development_set, feature_extractor)
                 save_models(models)
 
                 # 5

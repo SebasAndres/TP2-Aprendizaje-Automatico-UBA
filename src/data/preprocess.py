@@ -17,7 +17,7 @@ def download_dataset():
     return
 
 
-def preprocess_dataset(feature_extractor: TextFeatureExtractor) -> tuple[Dataset, Dataset]:
+def preprocess_dataset() -> tuple[Dataset, Dataset]:
     """
     A partir de los datasets locales crea las instancias del punctuation dataset y 
     capitalization dataset.
@@ -34,8 +34,8 @@ def preprocess_dataset(feature_extractor: TextFeatureExtractor) -> tuple[Dataset
     if not dataset_file.is_file():
         raise FileNotFoundError(f"No existe el dataset en {DATASET_PATH}")
 
-    punctuation_dataset = PunctuationDataset(DATASET_PATH, feature_extractor)
-    capitalization_dataset = CapitalizationDataset(DATASET_PATH, feature_extractor)
+    punctuation_dataset = PunctuationDataset(DATASET_PATH)
+    capitalization_dataset = CapitalizationDataset(DATASET_PATH)
 
     return punctuation_dataset, capitalization_dataset
 

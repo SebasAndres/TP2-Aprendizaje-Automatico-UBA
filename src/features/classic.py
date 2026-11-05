@@ -7,6 +7,7 @@ class ClassicFeatureExtractor(TextFeatureExtractor):
     def extract(self, tokens: list[str]) -> torch.Tensor:
         features = []
         vocales = set("aeiouáéíóú")
+        acentos = set("áéíóú")
         
         for token in tokens:
             # 1. ¿Es un sub-token de BERT? (empieza con ##)
@@ -26,9 +27,12 @@ class ClassicFeatureExtractor(TextFeatureExtractor):
             
             # 5. Proporción de vocales (para evitar que tokens largos dominen)
             vowel_ratio = num_vowels / length if length > 0 else 0.0
+
+            # 6. Contamos cuántos acentos tiene el token
+            num_acentos = float(sum(1 for char in clean_token if char in acentos))
             
             # Agregamos los atributos de este token como una lista
-            token_features = [is_subtoken, length, num_vowels, num_consonants, vowel_ratio]
+            token_features = [is_subtoken, length, num_vowels, num_consonants, vowel_ratio, num_acentos]
             features.append(token_features)
             
         # Devolvemos un tensor de dimensiones (n_tokens, n_features)

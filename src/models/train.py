@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset, DataLoader, random_split
 
 from src.constants import BATCH_SIZE, TEST_RATIO
+from src.data import collate_batch
 from src.models.classic import train_classic_model
 from src.models.standard_rnn import train_standard_rnn_model
 from src.models.bidirectional_rnn import train_bidirectional_rnn_model
@@ -21,13 +22,15 @@ def train_models(
         dataset=train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=0
+        num_workers=0,
+        collate_fn=collate_batch
     )
     test_loader = DataLoader(
         dataset=test_dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,  
-        num_workers=0
+        num_workers=0,
+        collate_fn=collate_batch
     )
     # Acá para cada modelo posible entrenar (!)
     classic_model = train_classic_model(train_loader, test_loader, feature_extractor)

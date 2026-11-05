@@ -1,15 +1,27 @@
 import gzip
 from abc import abstractmethod
+import torch
+from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
 from src.constants import EMBEDDINGS_MODEL, PUNCTUATION_MARKS
 from src.features import TextFeatureExtractor
 
+IGNORE_INDEX = -100
+
 
 def strip_punctuation(word: str) -> str:
     """Quita los signos de puntuación de los bordes de la palabra"""
     return word.strip(PUNCTUATION_MARKS)
+
+
+def collate_batch(
+    batch: list[tuple[list[str], torch.Tensor]],
+) -> tuple[list[list[str]], torch.Tensor]:
+    """Agrupa oraciones de largo variable, rellenando las etiquetas con IGNORE_INDEX"""
+    tokens, labels = zip(*batch)
+    return list(tokens), pad_sequence(list(labels), batch_first=True, padding_value=IGNORE_INDEX)
 
 
 class TextDataset(Dataset):

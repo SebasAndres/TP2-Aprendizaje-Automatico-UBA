@@ -1,4 +1,4 @@
-from src.data.base import TextDataset, strip_punctuation
+from src.data.base import IGNORE_INDEX, TextDataset, collate_batch, strip_punctuation
 from src.data.capitalization_dataset import CapitalizationDataset, word_capitalization
 from src.data.punctuation_dataset import PunctuationDataset, word_punctuation
 from src.data.preprocess import (
@@ -8,7 +8,9 @@ from src.data.preprocess import (
 )
 
 __all__ = [
+    "IGNORE_INDEX",
     "TextDataset",
+    "collate_batch",
     "strip_punctuation",
     "CapitalizationDataset",
     "word_capitalization",

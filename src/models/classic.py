@@ -6,7 +6,7 @@ import torch
 
 from src.problem import Problem
 from src.features import TextFeatureExtractor
-from src.metrics.words import concat_word_ids, token_word_ids
+from src.words import concat_word_ids, token_word_ids
 
 logger = logging.getLogger(__name__)
 

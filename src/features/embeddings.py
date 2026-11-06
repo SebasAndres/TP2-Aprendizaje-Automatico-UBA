@@ -3,6 +3,7 @@ from transformers import BertModel, BertTokenizer
 from src.constants import EMBEDDINGS_MODEL
 
 from src.features.base import TextFeatureExtractor
+from src.words import token_word_ids
 
 class EmbeddingsExtractor(TextFeatureExtractor):
     """Feature Extractor con embeddings, es token-a-token"""
@@ -23,17 +24,13 @@ class EmbeddingsExtractor(TextFeatureExtractor):
 
 
 class AverageEmbeddingsExtractor(EmbeddingsExtractor):
-    """
-    Feature Extractor con embeddings, token-a-token con contexto de la oración: concatena
-    a cada token el promedio de los embeddings de todos los tokens de la oración
-    """
+    """Feature Extractor que representa cada token con el promedio de embeddings de su palabra"""
 
     def extract(self, tokens: list[str]) -> torch.Tensor:
-        """
-        Devuelve un tensor (n_tokens, 2 * embedding_dim) donde cada fila es
-        [embedding del token, promedio de embeddings de la oración]
-        """
-
-        tokens_embeddings = super().extract(tokens)
-        avg_embedding = tokens_embeddings.mean(dim=0, keepdim=True).expand_as(tokens_embeddings)
-        return torch.cat([tokens_embeddings, avg_embedding], dim=1)
+        """Devuelve un tensor (n_tokens, embedding_dim): los tokens de una palabra comparten fila"""
+        embeddings = super().extract(tokens)
+        word_ids = torch.from_numpy(token_word_ids(tokens))
+        n_words = int(word_ids[-1]) + 1
+        totals = torch.zeros(n_words, embeddings.size(1)).index_add_(0, word_ids, embeddings)
+        averages = totals / torch.bincount(word_ids).unsqueeze(1)
+        return averages[word_ids]

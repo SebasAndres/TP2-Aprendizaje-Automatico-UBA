@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from src.data import IGNORE_INDEX
 from src.metrics.base import Metric, macro_f1
-from src.metrics.words import first_token_mask, majority_by_word
+from src.words import first_token_mask, majority_by_word
 
 N_CAPITALIZATION_CLASSES = 4
 

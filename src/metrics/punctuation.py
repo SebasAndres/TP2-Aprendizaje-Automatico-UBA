@@ -3,7 +3,7 @@ import torch
 
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 from src.metrics.base import Metric, macro_f1
-from src.metrics.words import first_token_mask, last_token_mask
+from src.words import first_token_mask, last_token_mask
 
 
 class PunctuationMetric(Metric):

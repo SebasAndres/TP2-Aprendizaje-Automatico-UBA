@@ -13,7 +13,6 @@ logger = logging.getLogger("src.pipeline")
 
 if __name__ == '__main__':
 
-    # INFO solo para nuestro código, así las librerías no llenan la salida
     logging.basicConfig(
         level=logging.WARNING,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s"

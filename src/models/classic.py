@@ -36,19 +36,20 @@ def _dataloader_to_numpy(
     return X, Y
 
 def train_classic_model(
-    train_loader: DataLoader, 
+    train_loader: DataLoader,
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     metric: Metric
-):
-    
+) -> RandomForestClassifier:
+
     X_train, Y_train = _dataloader_to_numpy(train_loader, feature_extractor)
 
-    model = RandomForestClassifier() 
+    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
     model.fit(X_train, Y_train)
 
     X_test, Y_test = _dataloader_to_numpy(test_loader, feature_extractor)
-    
+
     pred_test = model.predict(X_test)
     score = metric.score(pred_test, Y_test)
     print(score)
+    return model

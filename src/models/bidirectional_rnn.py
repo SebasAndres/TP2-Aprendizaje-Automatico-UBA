@@ -1,12 +1,12 @@
 from torch.utils.data import DataLoader
 
 from src.features import TextFeatureExtractor
-from src.metrics import Metric
+from src.problem import Problem
 
 def train_bidirectional_rnn_model(
     train_loader: DataLoader, 
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
-    metric: Metric
+    problem: Problem
 ):
     ...

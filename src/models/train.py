@@ -7,17 +7,13 @@ from src.models import (
     train_standard_rnn_model,
     train_bidirectional_rnn_model
 )
-from src.metrics import (
-    Metric,
-    CapitalizationMetric,
-    PunctuationMetric
-)
+from src.problem import Problem
 from src.features.base import TextFeatureExtractor
 
 def train_models(
     development_dataset: Dataset,
     feature_extractor: TextFeatureExtractor,
-    metric: Metric
+    problem: Problem
 ) -> dict[str, any]:
     """ 
     Acá se entrena y devuelve TODOS los modelos para el dataset dado.
@@ -41,9 +37,24 @@ def train_models(
         collate_fn=collate_batch
     )
 
-    classic_model = train_classic_model(train_loader, test_loader, feature_extractor, metric)
-    standard_rnn_model = train_standard_rnn_model(train_loader, test_loader, feature_extractor, metric)
-    bidirectional_rnn_model = train_bidirectional_rnn_model(train_loader, test_loader, feature_extractor, metric)
+    classic_model = train_classic_model(
+        train_loader, 
+        test_loader, 
+        feature_extractor, 
+        problem
+    )
+    standard_rnn_model = train_standard_rnn_model(
+        train_loader, 
+        test_loader, 
+        feature_extractor, 
+        problem
+    )
+    bidirectional_rnn_model = train_bidirectional_rnn_model(
+        train_loader, 
+        test_loader, 
+        feature_extractor, 
+        problem
+    )
 
     return {
         "classic_model": classic_model,

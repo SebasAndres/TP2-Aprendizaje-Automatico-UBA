@@ -1,9 +1,10 @@
+from typing import Any
+
 from torch.utils.data import DataLoader
-from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 
+from src.problem import Problem
 from src.features import TextFeatureExtractor
-from src.metrics import Metric
 
 
 def _dataloader_to_numpy(
@@ -39,17 +40,18 @@ def train_classic_model(
     train_loader: DataLoader,
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
-    metric: Metric
-) -> RandomForestClassifier:
+    problem: Problem
+) -> Any:
 
     X_train, Y_train = _dataloader_to_numpy(train_loader, feature_extractor)
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+    model = problem.classic_model()
     model.fit(X_train, Y_train)
 
     X_test, Y_test = _dataloader_to_numpy(test_loader, feature_extractor)
 
     pred_test = model.predict(X_test)
-    score = metric.score(pred_test, Y_test)
+    score = problem.metric.score(pred_test, Y_test)
+
     print(score)
     return model

@@ -10,34 +10,41 @@ from src.problem import CapitalizationProblem, PunctuationProblem
 if __name__ == '__main__':
 
     try:
-        # [1] Descarga localmente el/los datasets a utilizar
+        # Descarga localmente el/los datasets a utilizar
         download_dataset()
 
-        # [2] Genera las instancias de torch.util.data.Dataset en base a el/los 
-        # datasets descargados en local y el tipo de extractor de embeddings
+        # Por cada tipo de Feature Extractor a probar
         for feature_extractor in (
             ClassicFeatureExtractor(),
             AverageEmbeddingsExtractor(),
             EmbeddingsExtractor()
         ):
+
+            # Genera las instancias de torch.util.data.Dataset en base a el/los 
+            # datasets descargados en local y el tipo de extractor de embeddings
             (
                 punctuation_dataset,
                 capitalization_dataset
             ) = preprocess_dataset()
 
+            # Para cada problema
+            # obs: podría ser paralelo, no creo alcance la RAM
             for dataset, problem in [
                 (capitalization_dataset, CapitalizationProblem()), 
                 (punctuation_dataset, PunctuationProblem())
             ]:
-                # 3
+                # Dividimos datos
                 development_set, control_set = split_dataset_dev_control(dataset)
 
-                # 4
+                # Entrenamos modelos
                 models = train_models(development_set, feature_extractor, problem)
                 save_models(models)
 
-                # 5
-                # evaluate_performance(models, control_set)
+                # Elegimos el modelo ganador
+                ...
+
+                # Evaluamos performance sobre control para report 
+                # problem.metric.score(winner_preds, control_set[y])
                 pass
                         
     except Exception as e:

@@ -37,19 +37,28 @@ def train_models(
         collate_fn=collate_batch
     )
 
-    classic_model = train_classic_model(
+    (
+        classic_model,
+        classic_score
+    ) = train_classic_model(
         train_loader, 
         test_loader, 
         feature_extractor, 
         problem
     )
-    standard_rnn_model = train_standard_rnn_model(
+    (
+        standard_rnn_model,
+        standard_rnn_score
+    ) = train_standard_rnn_model(
         train_loader, 
         test_loader, 
         feature_extractor, 
         problem
     )
-    bidirectional_rnn_model = train_bidirectional_rnn_model(
+    (
+        bidirectional_rnn_model,
+        bidirectional_rnn_score
+    ) = train_bidirectional_rnn_model(
         train_loader, 
         test_loader, 
         feature_extractor, 
@@ -57,9 +66,18 @@ def train_models(
     )
 
     return {
-        "classic_model": classic_model,
-        "standard_rnn_model": standard_rnn_model,
-        "bidirectional_rnn_model": bidirectional_rnn_model
+        "classic": {
+            "model": classic_model,
+            "score": classic_score
+        },
+        "standard_rnn": {
+            "model": standard_rnn_model,
+            "score": standard_rnn_score,
+        },
+        "bidirectional_rnn": {
+            "model": bidirectional_rnn_model,
+            "score": bidirectional_rnn_score
+        }
     }
 
 def save_models(models):

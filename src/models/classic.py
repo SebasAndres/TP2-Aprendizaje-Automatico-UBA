@@ -41,17 +41,14 @@ def train_classic_model(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem
-) -> Any:
+) -> tuple[any, float]:
 
     X_train, Y_train = _dataloader_to_numpy(train_loader, feature_extractor)
-
     model = problem.classic_model()
     model.fit(X_train, Y_train)
 
     X_test, Y_test = _dataloader_to_numpy(test_loader, feature_extractor)
-
     pred_test = model.predict(X_test)
     score = problem.metric.score(pred_test, Y_test)
 
-    print(score)
-    return model
+    return model, score

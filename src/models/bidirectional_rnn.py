@@ -8,5 +8,5 @@ def train_bidirectional_rnn_model(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem
-):
-    ...
+) -> tuple[any, float]:
+    return None, -1

@@ -1,3 +1,5 @@
+import logging
+
 from torch.utils.data import Dataset, DataLoader, random_split
 
 from src.constants import BATCH_SIZE, TEST_RATIO
@@ -10,6 +12,23 @@ from src.models import (
 from src.problem import Problem
 from src.features.base import TextFeatureExtractor
 
+logger = logging.getLogger(__name__)
+
+TRAINERS = {
+    "classic": train_classic_model,
+    "standard_rnn": train_standard_rnn_model,
+    "bidirectional_rnn": train_bidirectional_rnn_model
+}
+
+def _build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
+    return DataLoader(
+        dataset=dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=shuffle,
+        num_workers=0,
+        collate_fn=collate_batch
+    )
+
 def train_models(
     development_dataset: Dataset,
     feature_extractor: TextFeatureExtractor,
@@ -21,64 +40,18 @@ def train_models(
     """
 
     train_dataset, test_dataset = random_split(development_dataset, [1-TEST_RATIO, TEST_RATIO])
+    logger.info("Split: train=%d, test=%d", len(train_dataset), len(test_dataset))
 
-    train_loader = DataLoader(
-        dataset=train_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=0,
-        collate_fn=collate_batch
-    )
-    test_loader = DataLoader(
-        dataset=test_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,  
-        num_workers=0,
-        collate_fn=collate_batch
-    )
+    train_loader = _build_loader(train_dataset, shuffle=True)
+    test_loader = _build_loader(test_dataset, shuffle=False)
 
-    (
-        classic_model,
-        classic_score
-    ) = train_classic_model(
-        train_loader, 
-        test_loader, 
-        feature_extractor, 
-        problem
-    )
-    (
-        standard_rnn_model,
-        standard_rnn_score
-    ) = train_standard_rnn_model(
-        train_loader, 
-        test_loader, 
-        feature_extractor, 
-        problem
-    )
-    (
-        bidirectional_rnn_model,
-        bidirectional_rnn_score
-    ) = train_bidirectional_rnn_model(
-        train_loader, 
-        test_loader, 
-        feature_extractor, 
-        problem
-    )
-
-    return {
-        "classic": {
-            "model": classic_model,
-            "score": classic_score
-        },
-        "standard_rnn": {
-            "model": standard_rnn_model,
-            "score": standard_rnn_score,
-        },
-        "bidirectional_rnn": {
-            "model": bidirectional_rnn_model,
-            "score": bidirectional_rnn_score
-        }
-    }
+    results = {}
+    for name, trainer in TRAINERS.items():
+        logger.info("Entrenando modelo %s", name)
+        model, score = trainer(train_loader, test_loader, feature_extractor, problem)
+        logger.info("Modelo %s terminado: score=%.4f", name, score)
+        results[name] = {"model": model, "score": score}
+    return results
 
 def save_models(models):
     return

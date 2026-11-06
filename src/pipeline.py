@@ -1,3 +1,5 @@
+import logging
+
 from src.data import download_dataset, preprocess_dataset, split_dataset_dev_control
 from src.features import (
     ClassicFeatureExtractor,
@@ -7,11 +9,23 @@ from src.features import (
 from src.models import train_models, save_models
 from src.problem import CapitalizationProblem, PunctuationProblem
 
+logger = logging.getLogger("src.pipeline")
+
 if __name__ == '__main__':
+
+    # INFO solo para nuestro código, así las librerías no llenan la salida
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
+    logging.getLogger("src").setLevel(logging.INFO)
 
     try:
         # Descarga localmente el/los datasets a utilizar
+        logger.info("Inicio del pipeline: descargando datasets")
         download_dataset()
+
+        logger.info("Cargando feature extractors")
 
         # Por cada tipo de Feature Extractor a probar
         for feature_extractor in (
@@ -19,9 +33,11 @@ if __name__ == '__main__':
             AverageEmbeddingsExtractor(),
             EmbeddingsExtractor()
         ):
+            logger.info("Feature extractor: %s", type(feature_extractor).__name__)
 
             # Genera las instancias de torch.util.data.Dataset en base a el/los 
             # datasets descargados en local y el tipo de extractor de embeddings
+            logger.info("Preprocesando datasets")
             (
                 punctuation_dataset,
                 capitalization_dataset
@@ -33,11 +49,19 @@ if __name__ == '__main__':
                 (capitalization_dataset, CapitalizationProblem()), 
                 (punctuation_dataset, PunctuationProblem())
             ]:
+                logger.info(
+                    "Problema: %s (%s, %d oraciones)",
+                    type(problem).__name__, type(feature_extractor).__name__, len(dataset)
+                )
+
                 # Dividimos datos
                 development_set, control_set = split_dataset_dev_control(dataset)
+                logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
 
                 # Entrenamos modelos
                 models = train_models(development_set, feature_extractor, problem)
+                breakpoint()
+                logger.info("Guardando modelos")
                 save_models(models)
 
                 # Elegimos el modelo ganador
@@ -46,6 +70,8 @@ if __name__ == '__main__':
                 # Evaluamos performance sobre control para report 
                 # problem.metric.score(winner_preds, control_set[y])
                 pass
-                        
-    except Exception as e:
-        print(e)
+
+        logger.info("Pipeline finalizado")
+
+    except Exception:
+        logger.exception("El pipeline falló")

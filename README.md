@@ -1,5 +1,7 @@
 # tp aa2
 
+> Ver [PENDIENTES](PENDIENTES.md) 👀
+
 Para ejecutar se usa
 ~~~bash
 uv run python -m src.pipeline

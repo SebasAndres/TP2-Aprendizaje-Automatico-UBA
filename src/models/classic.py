@@ -6,6 +6,7 @@ import torch
 
 from src.problem import Problem
 from src.features import TextFeatureExtractor
+from src.metrics.words import concat_word_ids, token_word_ids
 
 logger = logging.getLogger(__name__)
 
@@ -16,23 +17,21 @@ def _batch_to_numpy(
     batch_X: list[list[str]],
     batch_y: torch.Tensor,
     feature_extractor: TextFeatureExtractor
-) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """Extrae las features de cada oración del batch y recorta el padding de sus etiquetas"""
-    X_list = []
-    y_list = []
+) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Devuelve las features, las etiquetas sin padding y las palabras de cada oración del batch"""
+    sentences = []
     for tokens, padded_labels in zip(batch_X, batch_y):
         features = feature_extractor.extract(tokens) if tokens else None
         if features is None:
             continue
-        X_list.append(features.numpy())
         # Las etiquetas vienen con padding hasta el largo máximo del batch
-        y_list.append(padded_labels[:len(tokens)].numpy())
-    return X_list, y_list
+        sentences.append((features.numpy(), padded_labels[:len(tokens)].numpy(), token_word_ids(tokens)))
+    return sentences
 
 def _dataloader_to_numpy(
     dataloader: DataLoader,
     feature_extractor: TextFeatureExtractor
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Recibe un dataloder del dataset y devuelve las matrices de numpy X, Y a nivel token.
     Omite las oraciones sin tokens y aquellas que el extractor no puede representar.
 
@@ -42,38 +41,38 @@ def _dataloader_to_numpy(
         Matriz de features del dataset (n_tokens, n_features)
     - Y: np.ndarray
         Matriz de targets del dataset (n_tokens,) o (n_tokens, n_targets)
+    - word_ids: np.ndarray
+        Índice de la palabra de cada token (n_tokens,)
     """
 
-    X_list = []
-    y_list = []
+    sentences = []
     for i, (batch_X, batch_y) in enumerate(dataloader, start=1):
-        batch_X_list, batch_y_list = _batch_to_numpy(batch_X, batch_y, feature_extractor)
-        X_list.extend(batch_X_list)
-        y_list.extend(batch_y_list)
+        sentences.extend(_batch_to_numpy(batch_X, batch_y, feature_extractor))
         if i % LOG_EVERY_N_BATCHES == 0:
             logger.info("Extrayendo features: batch %d/%d", i, len(dataloader))
-    X = np.concatenate(X_list, axis=0)
-    Y = np.concatenate(y_list, axis=0)
-    logger.info("Features: %d/%d oraciones, X=%s, Y=%s", len(X_list), len(dataloader.dataset), X.shape, Y.shape)
-    return X, Y
+    X = np.concatenate([features for features, _, _ in sentences], axis=0)
+    Y = np.concatenate([labels for _, labels, _ in sentences], axis=0)
+    word_ids = concat_word_ids([ids for _, _, ids in sentences])
+    logger.info("Features: %d/%d oraciones, X=%s, Y=%s", len(sentences), len(dataloader.dataset), X.shape, Y.shape)
+    return X, Y, word_ids
 
 def train_classic_model(
     train_loader: DataLoader,
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem
-) -> tuple[any, float]:
+) -> tuple[any, dict[str, float]]:
 
     logger.info("Extrayendo features de train")
-    X_train, Y_train = _dataloader_to_numpy(train_loader, feature_extractor)
+    X_train, Y_train, _ = _dataloader_to_numpy(train_loader, feature_extractor)
     model = problem.classic_model()
     logger.info("Ajustando %s", type(model).__name__)
     model.fit(X_train, Y_train)
 
     logger.info("Extrayendo features de test")
-    X_test, Y_test = _dataloader_to_numpy(test_loader, feature_extractor)
+    X_test, Y_test, word_ids_test = _dataloader_to_numpy(test_loader, feature_extractor)
     logger.info("Prediciendo y calculando score sobre test")
     pred_test = model.predict(X_test)
-    score = problem.metric.score(pred_test, Y_test)
+    score = problem.metric.score(pred_test, Y_test, word_ids_test)
 
     return model, score

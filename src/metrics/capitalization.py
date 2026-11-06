@@ -1,17 +1,22 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import f1_score
 
 from src.data import IGNORE_INDEX
-from src.metrics.base import Metric
+from src.metrics.base import Metric, macro_f1
+from src.metrics.words import first_token_mask, majority_by_word
+
+N_CAPITALIZATION_CLASSES = 4
 
 
 class CapitalizationMetric(Metric):
 
-    def score(self, pred: np.ndarray, real: np.ndarray) -> float:
-        """F1 macro a nivel token"""
-        return float(f1_score(real, pred, average="macro", zero_division=0))
+    def score(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> dict[str, float]:
+        """F1 macro a nivel palabra. Todos los tokens de una palabra comparten la etiqueta real,
+        y la predicción de la palabra es la más votada entre sus tokens"""
+        word_real = real[first_token_mask(word_ids)]
+        word_pred = majority_by_word(pred, word_ids)
+        return {"capitalizacion": macro_f1(word_real, word_pred, N_CAPITALIZATION_CLASSES)}
 
     def loss(self, logits: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
         """CrossEntropy ignorando el padding. Los logits tienen forma (..., n_clases)

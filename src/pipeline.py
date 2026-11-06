@@ -59,7 +59,6 @@ if __name__ == '__main__':
 
                 # Entrenamos modelos
                 models = train_models(development_set, feature_extractor, problem)
-                breakpoint()
                 logger.info("Guardando modelos")
                 save_models(models)
 

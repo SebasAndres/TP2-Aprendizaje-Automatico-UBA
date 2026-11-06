@@ -1,8 +1,9 @@
 import logging
 
+import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from src.constants import BATCH_SIZE, TEST_RATIO
+from src.constants import BATCH_SIZE, SPLIT_SEED, TEST_RATIO
 from src.data import collate_batch
 from src.models import (
     train_classic_model,
@@ -39,7 +40,11 @@ def train_models(
     Inicialmente probamos los mismos modelos para ambos problemas. 
     """
 
-    train_dataset, test_dataset = random_split(development_dataset, [1-TEST_RATIO, TEST_RATIO])
+    train_dataset, test_dataset = random_split(
+        development_dataset,
+        [1-TEST_RATIO, TEST_RATIO],
+        generator=torch.Generator().manual_seed(SPLIT_SEED)
+    )
     logger.info("Split: train=%d, test=%d", len(train_dataset), len(test_dataset))
 
     train_loader = _build_loader(train_dataset, shuffle=True)
@@ -49,7 +54,7 @@ def train_models(
     for name, trainer in TRAINERS.items():
         logger.info("Entrenando modelo %s", name)
         model, score = trainer(train_loader, test_loader, feature_extractor, problem)
-        logger.info("Modelo %s terminado: score=%.4f", name, score)
+        logger.info("Modelo %s terminado: score=%s", name, score)
         results[name] = {"model": model, "score": score}
     return results
 

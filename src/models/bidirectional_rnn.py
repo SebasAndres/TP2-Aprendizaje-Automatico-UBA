@@ -12,6 +12,6 @@ def train_bidirectional_rnn_model(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem
-) -> tuple[any, float]:
-    logger.warning("RNN bidireccional sin implementar: se devuelve None y score -1")
-    return None, -1
+) -> tuple[any, dict[str, float]]:
+    logger.warning("RNN bidireccional sin implementar: no hay modelo ni score")
+    return None, {}

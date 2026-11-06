@@ -2,14 +2,22 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from src.constants import BATCH_SIZE, TEST_RATIO
 from src.data import collate_batch
-from src.models.classic import train_classic_model
-from src.models.standard_rnn import train_standard_rnn_model
-from src.models.bidirectional_rnn import train_bidirectional_rnn_model
+from src.models import (
+    train_classic_model,
+    train_standard_rnn_model,
+    train_bidirectional_rnn_model
+)
+from src.metrics import (
+    Metric,
+    CapitalizationMetric,
+    PunctuationMetric
+)
 from src.features.base import TextFeatureExtractor
 
 def train_models(
     development_dataset: Dataset,
-    feature_extractor: TextFeatureExtractor
+    feature_extractor: TextFeatureExtractor,
+    metric: Metric
 ) -> dict[str, any]:
     """ 
     Acá se entrena y devuelve TODOS los modelos para el dataset dado.
@@ -32,10 +40,10 @@ def train_models(
         num_workers=0,
         collate_fn=collate_batch
     )
-    # Acá para cada modelo posible entrenar (!)
-    classic_model = train_classic_model(train_loader, test_loader, feature_extractor)
-    standard_rnn_model = train_standard_rnn_model(train_loader, test_loader, feature_extractor)
-    bidirectional_rnn_model = train_bidirectional_rnn_model(train_loader, test_loader, feature_extractor)
+
+    classic_model = train_classic_model(train_loader, test_loader, feature_extractor, metric)
+    standard_rnn_model = train_standard_rnn_model(train_loader, test_loader, feature_extractor, metric)
+    bidirectional_rnn_model = train_bidirectional_rnn_model(train_loader, test_loader, feature_extractor, metric)
 
     return {
         "classic_model": classic_model,

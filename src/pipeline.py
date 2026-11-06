@@ -5,6 +5,7 @@ from src.features import (
     AverageEmbeddingsExtractor,
 )
 from src.models import train_models, save_models
+from src.metrics import CapitalizationMetric, PunctuationMetric
 
 if __name__ == '__main__':
 
@@ -24,12 +25,15 @@ if __name__ == '__main__':
                 capitalization_dataset
             ) = preprocess_dataset()
 
-            for dataset in (capitalization_dataset, punctuation_dataset):
+            for dataset, metric in [
+                (capitalization_dataset, CapitalizationMetric), 
+                (punctuation_dataset, PunctuationMetric)
+            ]:
                 # 3
                 development_set, control_set = split_dataset_dev_control(dataset)
 
                 # 4
-                models = train_models(development_set, feature_extractor)
+                models = train_models(development_set, feature_extractor, metric)
                 save_models(models)
 
                 # 5

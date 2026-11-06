@@ -8,14 +8,16 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from src.constants import BATCH_SIZE, SPLIT_SEED, TEST_RATIO
 from src.data import collate_batch
-from src.models import (
-    train_classic_model,
-    train_standard_rnn_model,
-    train_bidirectional_rnn_model
+from src.features import (
+    AverageEmbeddingsExtractor,
+    ClassicFeatureExtractor,
+    EmbeddingsExtractor,
+    TextFeatureExtractor,
 )
 from src.problem import Problem
-from src.features import AverageEmbeddingsExtractor, ClassicFeatureExtractor, EmbeddingsExtractor
-from src.features.base import TextFeatureExtractor
+from src.training.bidirectional_rnn import train_bidirectional_rnn_model
+from src.training.classic import train_classic_model
+from src.training.standard_rnn import train_standard_rnn_model
 
 logger = logging.getLogger(__name__)
 

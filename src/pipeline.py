@@ -1,7 +1,7 @@
 import logging
 
 from src.data import download_dataset, preprocess_dataset, split_dataset_dev_control
-from src.models import build_experiments, train_models, save_models
+from src.training import build_experiments, train_models, save_models
 from src.problem import CapitalizationProblem, PunctuationProblem
 
 logger = logging.getLogger("src.pipeline")

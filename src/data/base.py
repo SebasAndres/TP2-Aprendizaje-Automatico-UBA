@@ -6,7 +6,6 @@ from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
 from src.constants import EMBEDDINGS_MODEL, PUNCTUATION_MARKS
-from src.features import TextFeatureExtractor
 
 IGNORE_INDEX = -100
 
@@ -43,9 +42,6 @@ class TextDataset(Dataset):
         y devuelve una etiqueta por token
         """
         raise NotImplementedError()
-
-    def _extract_features(self, tokens: list[str]):
-        return self.feature_extractor.extract(tokens)
 
     def _tokenize_words(self, words: list[str]) -> list[list[str]]:
         """Tokeniza cada palabra normalizada (sin puntuación y en minúsculas)"""

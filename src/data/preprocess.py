@@ -9,7 +9,6 @@ from src.constants import (
 )
 from src.data.punctuation_dataset import PunctuationDataset
 from src.data.capitalization_dataset import CapitalizationDataset
-from src.features import TextFeatureExtractor
 
 def download_dataset():
     """

@@ -1,0 +1,4 @@
+- Validar como se puede aplicar CV en vez de armar los dataloaders de train / test
+- Implementar RNN y RNN bidireccional para cada tipo de problema
+- Agregar al pipeline la creación del CSV con la eleccion del modelo ganador
+- Definir bien qué métricas utilizar por tipo de problema.

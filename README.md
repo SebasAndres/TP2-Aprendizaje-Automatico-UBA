@@ -1,6 +1,6 @@
 # tp aa2
 
-> Ver [PENDIENTES](PENDIENTES.md) 👀
+> Ver [PENDIENTES](PENDIENTES.md) y [Entrenar en Google Colab](docs/google-colab-training.md) 👀
 
 Para ejecutar se usa
 ~~~bash

@@ -18,11 +18,6 @@ Pegar esto en una celda:
 !pip install -q uv
 !uv sync
 ```
-
-Si el repo es privado, el clone te va a pedir autenticarte: lo más fácil es usar un token de GitHub en la URL. No lo dejes escrito en un notebook que después compartas.
-
-Usá `%cd` y no `!cd`, porque con `!` el cambio de carpeta se pierde en la línea siguiente.
-
 ## 3. Correr el pipeline
 
 ```python

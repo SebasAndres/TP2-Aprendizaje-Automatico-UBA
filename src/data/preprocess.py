@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, random_split
 from src.constants import (
     DATASET_PATH, 
     CONTROL_RATIO,
-    SPLIT_SEED,
+    RANDOM_SEED,
 )
 from src.data.punctuation_dataset import PunctuationDataset
 from src.data.capitalization_dataset import CapitalizationDataset
@@ -50,6 +50,6 @@ def split_dataset_dev_control(dataset: Dataset) -> tuple[Dataset, Dataset]:
     development_dataset, control_dataset = random_split(
         dataset, 
         [development_size, control_size],
-        generator=torch.Generator().manual_seed(SPLIT_SEED)
+        generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
     return development_dataset, control_dataset

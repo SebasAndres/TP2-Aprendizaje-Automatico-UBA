@@ -9,8 +9,8 @@ CONTROL_RATIO = 0.2
 
 TEST_RATIO = 0.2
 
-# Semilla de los splits: todos los modelos se comparan sobre los mismos datos
-SPLIT_SEED = 42
+# Todos los modelos se comparan sobre los mismos datos y se inicializan con la misma SEED
+RANDOM_SEED = 12
 
 # Signos que se remueven de los bordes de cada palabra al normalizar el texto
 PUNCTUATION_MARKS = '¿?¡!.,;:"«»“”()—–-'

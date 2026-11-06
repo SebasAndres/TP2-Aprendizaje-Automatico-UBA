@@ -6,7 +6,7 @@ from typing import Any
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from src.constants import BATCH_SIZE, SPLIT_SEED, TEST_RATIO
+from src.constants import BATCH_SIZE, RANDOM_SEED, TEST_RATIO
 from src.data import collate_batch
 from src.features import (
     AverageEmbeddingsExtractor,
@@ -62,7 +62,7 @@ def train_models(
     train_dataset, test_dataset = random_split(
         development_dataset,
         [1-TEST_RATIO, TEST_RATIO],
-        generator=torch.Generator().manual_seed(SPLIT_SEED)
+        generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
     logger.info("Split: train=%d, test=%d", len(train_dataset), len(test_dataset))
 

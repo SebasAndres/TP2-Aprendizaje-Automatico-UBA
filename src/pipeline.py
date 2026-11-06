@@ -26,8 +26,8 @@ if __name__ == '__main__':
             ) = preprocess_dataset()
 
             for dataset, metric in [
-                (capitalization_dataset, CapitalizationMetric), 
-                (punctuation_dataset, PunctuationMetric)
+                (capitalization_dataset, CapitalizationMetric()), 
+                (punctuation_dataset, PunctuationMetric())
             ]:
                 # 3
                 development_set, control_set = split_dataset_dev_control(dataset)

@@ -5,7 +5,7 @@ DATASET_PATH = "datasets/es.txt.gz"
 
 BATCH_SIZE = 1000
 
-CONTROL_RATIO = 0.8
+CONTROL_RATIO = 0.2
 
 TEST_RATIO = 0.2
 

@@ -21,9 +21,9 @@ def _batch_to_numpy(
     """Devuelve las features, las etiquetas sin padding y las palabras de cada oración del batch"""
     sentences = []
     for tokens, padded_labels in zip(batch_X, batch_y):
-        features = feature_extractor.extract(tokens) if tokens else None
-        if features is None:
+        if not tokens:
             continue
+        features = feature_extractor.extract(tokens)
         # Las etiquetas vienen con padding hasta el largo máximo del batch
         sentences.append((features.numpy(), padded_labels[:len(tokens)].numpy(), token_word_ids(tokens)))
     return sentences
@@ -33,7 +33,7 @@ def _dataloader_to_numpy(
     feature_extractor: TextFeatureExtractor
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Recibe un dataloder del dataset y devuelve las matrices de numpy X, Y a nivel token.
-    Omite las oraciones sin tokens y aquellas que el extractor no puede representar.
+    Omite las oraciones sin tokens.
 
     Returns
     -------

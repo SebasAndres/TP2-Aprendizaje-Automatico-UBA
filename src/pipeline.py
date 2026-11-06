@@ -1,12 +1,7 @@
 import logging
 
 from src.data import download_dataset, preprocess_dataset, split_dataset_dev_control
-from src.features import (
-    ClassicFeatureExtractor,
-    EmbeddingsExtractor,
-    AverageEmbeddingsExtractor,
-)
-from src.models import train_models, save_models
+from src.models import build_experiments, train_models, save_models
 from src.problem import CapitalizationProblem, PunctuationProblem
 
 logger = logging.getLogger("src.pipeline")
@@ -24,50 +19,39 @@ if __name__ == '__main__':
         logger.info("Inicio del pipeline: descargando datasets")
         download_dataset()
 
-        logger.info("Cargando feature extractors")
+        logger.info("Cargando combinaciones modelos-featureExtractors")
+        experiments = build_experiments()
 
-        # Por cada tipo de Feature Extractor a probar
-        for feature_extractor in (
-            ClassicFeatureExtractor(),
-            AverageEmbeddingsExtractor(),
-            EmbeddingsExtractor()
-        ):
-            logger.info("Feature extractor: %s", type(feature_extractor).__name__)
+        # Genera las instancias de torch.util.data.Dataset en base a el/los
+        # datasets descargados en local
+        logger.info("Preprocesando datasets")
+        (
+            punctuation_dataset,
+            capitalization_dataset
+        ) = preprocess_dataset()
 
-            # Genera las instancias de torch.util.data.Dataset en base a el/los 
-            # datasets descargados en local y el tipo de extractor de embeddings
-            logger.info("Preprocesando datasets")
-            (
-                punctuation_dataset,
-                capitalization_dataset
-            ) = preprocess_dataset()
+        # Para cada problema
+        # obs: podría ser paralelo, no creo alcance la RAM
+        for dataset, problem in [
+            (capitalization_dataset, CapitalizationProblem()),
+            (punctuation_dataset, PunctuationProblem())
+        ]:
+            logger.info("Problema: %s (%d oraciones)", type(problem).__name__, len(dataset))
 
-            # Para cada problema
-            # obs: podría ser paralelo, no creo alcance la RAM
-            for dataset, problem in [
-                (capitalization_dataset, CapitalizationProblem()), 
-                (punctuation_dataset, PunctuationProblem())
-            ]:
-                logger.info(
-                    "Problema: %s (%s, %d oraciones)",
-                    type(problem).__name__, type(feature_extractor).__name__, len(dataset)
-                )
+            # Dividimos datos
+            development_set, control_set = split_dataset_dev_control(dataset)
+            logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
 
-                # Dividimos datos
-                development_set, control_set = split_dataset_dev_control(dataset)
-                logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
+            # Entrenamos modelos
+            models = train_models(development_set, experiments, problem)
+            logger.info("Guardando modelos")
+            save_models(models)
 
-                # Entrenamos modelos
-                models = train_models(development_set, feature_extractor, problem)
-                logger.info("Guardando modelos")
-                save_models(models)
+            # Elegimos el modelo ganador
+            ...
 
-                # Elegimos el modelo ganador
-                ...
-
-                # Evaluamos performance sobre control para report 
-                # problem.metric.score(winner_preds, control_set[y])
-                pass
+            # Evaluamos performance sobre control para report
+            # problem.metric.score(winner_preds, control_set[y])
 
         logger.info("Pipeline finalizado")
 

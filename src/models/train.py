@@ -1,4 +1,7 @@
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
@@ -11,15 +14,29 @@ from src.models import (
     train_bidirectional_rnn_model
 )
 from src.problem import Problem
+from src.features import AverageEmbeddingsExtractor, ClassicFeatureExtractor, EmbeddingsExtractor
 from src.features.base import TextFeatureExtractor
 
 logger = logging.getLogger(__name__)
 
-TRAINERS = {
-    "classic": train_classic_model,
-    "standard_rnn": train_standard_rnn_model,
-    "bidirectional_rnn": train_bidirectional_rnn_model
-}
+@dataclass(frozen=True)
+class Experiment:
+    """Un modelo a entrenar junto con el extractor de features que recibe"""
+    name: str
+    trainer: Callable[..., tuple[Any, dict[str, float]]]
+    feature_extractor: TextFeatureExtractor
+
+
+def build_experiments() -> list[Experiment]:
+    """Define las combinaciones de modelo y features que pide el enunciado"""
+    embeddings = EmbeddingsExtractor()
+    return [
+        Experiment("classic_features", train_classic_model, ClassicFeatureExtractor()),
+        Experiment("classic_embeddings", train_classic_model, AverageEmbeddingsExtractor()),
+        Experiment("standard_rnn", train_standard_rnn_model, embeddings),
+        Experiment("bidirectional_rnn", train_bidirectional_rnn_model, embeddings),
+    ]
+
 
 def _build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
     return DataLoader(
@@ -32,7 +49,7 @@ def _build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
 
 def train_models(
     development_dataset: Dataset,
-    feature_extractor: TextFeatureExtractor,
+    experiments: list[Experiment],
     problem: Problem
 ) -> dict[str, any]:
     """ 
@@ -51,11 +68,11 @@ def train_models(
     test_loader = _build_loader(test_dataset, shuffle=False)
 
     results = {}
-    for name, trainer in TRAINERS.items():
-        logger.info("Entrenando modelo %s", name)
-        model, score = trainer(train_loader, test_loader, feature_extractor, problem)
-        logger.info("Modelo %s terminado: score=%s", name, score)
-        results[name] = {"model": model, "score": score}
+    for experiment in experiments:
+        logger.info("Entrenando modelo %s", experiment.name)
+        model, score = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
+        logger.info("Modelo %s terminado: score=%s", experiment.name, score)
+        results[experiment.name] = {"model": model, "score": score}
     return results
 
 def save_models(models):

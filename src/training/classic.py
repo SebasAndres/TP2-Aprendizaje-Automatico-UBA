@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 from torch.utils.data import DataLoader
 import numpy as np
@@ -7,6 +6,7 @@ import torch
 
 from src.problem import Problem
 from src.features import TextFeatureExtractor
+from src.training.result import TrainResult
 from src.words import concat_word_ids, token_word_ids
 
 logger = logging.getLogger(__name__)
@@ -62,8 +62,9 @@ def train_classic_model(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem
-) -> tuple[Any, dict[str, float], list]:
-
+) -> TrainResult:
+    """Ajusta el modelo clásico del problema sobre train y devuelve sus predicciones sobre
+    test a nivel palabra. No entrena por épocas, así que no tiene historial"""
     logger.info("Extrayendo features de train")
     X_train, Y_train, _ = _dataloader_to_numpy(train_loader, feature_extractor)
     model = problem.classic_model()
@@ -72,8 +73,6 @@ def train_classic_model(
 
     logger.info("Extrayendo features de test")
     X_test, Y_test, word_ids_test = _dataloader_to_numpy(test_loader, feature_extractor)
-    logger.info("Prediciendo y calculando score sobre test")
+    logger.info("Prediciendo sobre test")
     pred_test = model.predict(X_test)
-    score = problem.metric.score(pred_test, Y_test, word_ids_test)
-
-    return model, score, []  # sin épocas: no hay historial
+    return TrainResult(model, problem.metric.word_level(pred_test, Y_test, word_ids_test))

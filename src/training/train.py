@@ -2,8 +2,8 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
+import joblib
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
@@ -17,8 +17,10 @@ from src.features import (
 )
 from src.problem import Problem
 from src.training.classic import train_classic_model
-from src.training.neural import format_score, neural_trainer
-from src.training.plots import save_training_plot
+from src.training.joint import train_joint_model
+from src.training.neural import neural_trainer
+from src.training.plots import save_class_metrics_plot, save_confusion_matrices, save_training_plot
+from src.training.result import TrainResult, format_score
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ logger = logging.getLogger(__name__)
 class Experiment:
     """Un modelo a entrenar junto con el extractor de features que recibe"""
     name: str
-    trainer: Callable[..., tuple[Any, dict[str, float], list]]
+    trainer: Callable[[DataLoader, DataLoader, TextFeatureExtractor, Problem], TrainResult]
     feature_extractor: TextFeatureExtractor
 
 
@@ -38,6 +40,7 @@ def build_experiments() -> list[Experiment]:
         Experiment("classic_embeddings", train_classic_model, AverageEmbeddingsExtractor()),
         Experiment("standard_rnn", neural_trainer(lambda problem: problem.standard_rnn_model()), embeddings),
         Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()), embeddings),
+        Experiment("joint_rnn", train_joint_model, embeddings),
     ]
 
 
@@ -50,39 +53,49 @@ def _build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
         collate_fn=collate_batch
     )
 
+def _save_experiment(name: str, result: TrainResult, model_dir: Path, problem_name: str) -> None:
+    """Guarda el modelo entrenado y su gráfico. Las redes guardan sus pesos (.pkl) y los
+    modelos clásicos el objeto completo (.joblib). El gráfico es la evolución por época si
+    entrena por épocas, o la precision/recall por clase sobre test si no (modelos clásicos)"""
+    if isinstance(result.model, torch.nn.Module):
+        torch.save(result.model.state_dict(), model_dir / f"{name}.pkl")
+    elif result.model is not None:
+        joblib.dump(result.model, model_dir / f"{name}.joblib", compress=3)
+    if result.history:
+        save_training_plot(result.history, model_dir / f"{name}.png", f"{problem_name} · {name} (train)")
+    elif result.test_tasks:
+        save_class_metrics_plot(result.per_class, model_dir / f"{name}.png", f"{problem_name} · {name} (test)")
+
+
 def train_models(
     development_dataset: Dataset,
     experiments: list[Experiment],
     problem: Problem
-) -> dict[str, any]:
-    """ 
-    Acá se entrena y devuelve TODOS los modelos para el dataset dado.
-    Inicialmente probamos los mismos modelos para ambos problemas. 
+) -> dict[str, TrainResult]:
     """
-
+    Acá se entrena y devuelve TODOS los modelos para el dataset dado.
+    Inicialmente probamos los mismos modelos para ambos problemas.
+    Al final guarda las matrices de confusión sobre test de todos los modelos.
+    """
     train_dataset, test_dataset = random_split(
         development_dataset,
         [1-TEST_RATIO, TEST_RATIO],
         generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
     logger.info("Split: train=%d, test=%d", len(train_dataset), len(test_dataset))
-
     train_loader = _build_loader(train_dataset, shuffle=True)
     test_loader = _build_loader(test_dataset, shuffle=False)
 
+    problem_name = problem.__class__.__name__
+    model_dir = Path(MODELS_DIR) / problem_name
+    model_dir.mkdir(parents=True, exist_ok=True)
     results = {}
     for experiment in experiments:
         logger.info("Entrenando modelo %s", experiment.name)
-        model, score, history = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
+        result = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
+        _save_experiment(experiment.name, result, model_dir, problem_name)
+        logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(result.score))
+        results[experiment.name] = result
 
-        if isinstance(model, torch.nn.Module):
-            model_dir = Path(MODELS_DIR) / problem.__class__.__name__
-            model_dir.mkdir(parents=True, exist_ok=True)
-            torch.save(model.state_dict(), model_dir / f"{experiment.name}.pkl")
-            if history:
-                title = f"{problem.__class__.__name__} · {experiment.name} (train)"
-                save_training_plot(history, model_dir / f"{experiment.name}.png", title)
-
-        logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(score))
-        results[experiment.name] = {"model": model, "score": score, "history": history}
+    save_confusion_matrices(results, model_dir / "confusion_matrices.png", f"{problem_name} · matrices de confusión (test)")
     return results

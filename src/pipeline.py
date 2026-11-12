@@ -2,7 +2,7 @@ import logging
 
 from src.data import preprocess_dataset, split_dataset_dev_control
 from src.training import build_experiments, train_models
-from src.training.neural import format_score
+from src.training.result import format_score
 from src.problem import CapitalizationProblem, PunctuationProblem
 
 logger = logging.getLogger("src.pipeline")
@@ -51,11 +51,11 @@ if __name__ == '__main__':
             # Elegimos el modelo ganador
             winning_experiment = max(
                 experiment_results,
-                key=lambda name: overall_score(experiment_results[name]["score"])
+                key=lambda name: overall_score(experiment_results[name].score)
             )
             logger.info(
                 "Ganador en test: %s (%s)",
-                winning_experiment, format_score(experiment_results[winning_experiment]["score"])
+                winning_experiment, format_score(experiment_results[winning_experiment].score)
             )
 
             # Evaluamos performance sobre control para report

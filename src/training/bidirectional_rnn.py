@@ -60,7 +60,6 @@ def train_bidirectional_rnn_model(
 ) -> tuple[any, dict[str, float]]:
     
     try:
-        # AQUÍ CAMBIA: Instanciamos el modelo bidireccional
         model = problem.bidirectional_rnn_model()
     except NotImplementedError as error:
         logger.warning("RNN bidireccional sin implementar para %s: %s", type(problem).__name__, error)

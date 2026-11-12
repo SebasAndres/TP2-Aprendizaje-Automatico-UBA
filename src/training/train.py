@@ -6,7 +6,7 @@ from typing import Any
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from joint_rnn import JointRNN
+from src.joint_rnn import JointRNN
 from src.constants import BATCH_SIZE, RANDOM_SEED, TEST_RATIO
 from src.data import collate_batch
 from src.features import (

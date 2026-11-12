@@ -8,6 +8,7 @@ from src.words import first_token_mask, last_token_mask
 
 
 class PunctuationMetric(Metric):
+    tasks = ("punt_inicial", "punt_final")
 
     def word_level(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> dict[str, WordLevelTask]:
         """La puntuación inicial se lee del primer token de la palabra y la final del último,

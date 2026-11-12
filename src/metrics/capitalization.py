@@ -10,6 +10,7 @@ N_CAPITALIZATION_CLASSES = 4
 
 
 class CapitalizationMetric(Metric):
+    tasks = ("capitalizacion",)
 
     def word_level(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> dict[str, WordLevelTask]:
         """Todos los tokens de una palabra comparten la etiqueta real,

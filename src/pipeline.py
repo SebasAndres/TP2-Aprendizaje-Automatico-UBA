@@ -1,7 +1,7 @@
 import logging
 
 from src.data import preprocess_dataset, split_dataset_dev_control
-from src.training import build_experiments, train_models, save_models
+from src.training import build_experiments, train_models
 from src.problem import CapitalizationProblem, PunctuationProblem
 
 logger = logging.getLogger("src.pipeline")
@@ -37,17 +37,20 @@ if __name__ == '__main__':
             development_set, control_set = split_dataset_dev_control(dataset)
             logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
 
-            models = train_models(development_set, experiments, problem)
-            logger.info("Guardando modelos")
-            save_models(models)
+            experiment_results = train_models(development_set, experiments, problem)
 
             # Elegimos el modelo ganador
-            ...
+            winning_experiment = max(experiment_results, key=lambda k: experiment_results[k]["score"])            
+            logger.info(
+                f"El experimento que mejor performó para TEST fue {winning_experiment} "
+                f"performó con un score={experiment_results[winning_experiment]}"
+            )
 
             # Evaluamos performance sobre control para report
-            # problem.metric.score(winner_preds, control_set[y])
+            # TODO
+            
 
         logger.info("Pipeline finalizado")
 
-    except Exception:
-        logger.exception("El pipeline falló")
+    except Exception as e:
+        logger.exception(f"El pipeline falló por {e}")

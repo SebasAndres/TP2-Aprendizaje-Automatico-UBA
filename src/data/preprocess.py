@@ -6,6 +6,8 @@ from src.constants import (
     DATASET_PATH, 
     CONTROL_RATIO,
     RANDOM_SEED,
+    CAPITALIZATION_DATASET_SIZE,
+    PUNCTUATION_DATASET_SIZE
 )
 from src.data.punctuation_dataset import PunctuationDataset
 from src.data.capitalization_dataset import CapitalizationDataset
@@ -28,8 +30,8 @@ def preprocess_dataset() -> tuple[Dataset, Dataset]:
     if not dataset_file.is_file():
         raise FileNotFoundError(f"No existe el dataset en {DATASET_PATH}")
 
-    punctuation_dataset = PunctuationDataset(DATASET_PATH)
-    capitalization_dataset = CapitalizationDataset(DATASET_PATH)
+    punctuation_dataset = PunctuationDataset(DATASET_PATH, PUNCTUATION_DATASET_SIZE)
+    capitalization_dataset = CapitalizationDataset(DATASET_PATH, CAPITALIZATION_DATASET_SIZE)
 
     return punctuation_dataset, capitalization_dataset
 

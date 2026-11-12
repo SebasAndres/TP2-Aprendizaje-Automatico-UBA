@@ -28,10 +28,11 @@ class TextDataset(Dataset):
     def __init__(
         self, 
         path: str,
+        size: int
     ):
         self.path = path
         with gzip.open(self.path, mode="rt", encoding="utf-8") as f:
-            self.data = f.read().splitlines()
+            self.data = f.read().splitlines()[:size]
         self.len = len(self.data)
         self.tokenizer = BertTokenizer.from_pretrained(EMBEDDINGS_MODEL)
 

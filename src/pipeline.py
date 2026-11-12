@@ -1,5 +1,7 @@
 import logging
+from argparse import ArgumentParser, Namespace
 
+from src.constants import CAPITALIZATION_DATASET_SIZE, PUNCTUATION_DATASET_SIZE
 from src.data import preprocess_dataset, split_dataset_dev_control
 from src.training import build_experiments, evaluate_on_control, train_models
 from src.training.result import format_score
@@ -15,7 +17,19 @@ def overall_score(score: dict[str, float]) -> float:
         return float("-inf")
     return sum(score.values()) / len(score)
 
+
+def parse_args() -> Namespace:
+    """Cantidad de oraciones a usar de cada dataset; por defecto, las de src/constants.py"""
+    parser = ArgumentParser(description="Entrena y compara los modelos de cada problema")
+    parser.add_argument("--capitalization-size", type=int, default=CAPITALIZATION_DATASET_SIZE,
+                        help=f"oraciones del dataset de capitalización (default: {CAPITALIZATION_DATASET_SIZE})")
+    parser.add_argument("--punctuation-size", type=int, default=PUNCTUATION_DATASET_SIZE,
+                        help=f"oraciones del dataset de puntuación (default: {PUNCTUATION_DATASET_SIZE})")
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
+    args = parse_args()
 
     logging.basicConfig(
         level=logging.WARNING,
@@ -33,7 +47,7 @@ if __name__ == '__main__':
         (
             punctuation_dataset,
             capitalization_dataset
-        ) = preprocess_dataset()
+        ) = preprocess_dataset(args.punctuation_size, args.capitalization_size)
 
         # Para cada problema
         # obs: podría ser paralelo, no creo alcance la RAM

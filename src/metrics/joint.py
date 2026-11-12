@@ -1,9 +1,7 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 
-from src.data import IGNORE_INDEX
-from src.metrics.base import Metric, WordLevelTask
+from src.metrics.base import Metric, WordLevelTask, multitask_cross_entropy
 from src.metrics.capitalization import CapitalizationMetric
 from src.metrics.punctuation import PunctuationMetric
 
@@ -26,11 +24,4 @@ class JointMetric(Metric):
     def loss(self, logits: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
         """Suma de la CrossEntropy de cada tarea, ignorando el padding.
         logits: (batch, n_tokens, 3 tareas, n_clases), real: (batch, n_tokens, 3 tareas)"""
-        return sum(
-            F.cross_entropy(
-                logits[:, :, task].reshape(-1, logits.size(-1)),
-                real[:, :, task].reshape(-1),
-                ignore_index=IGNORE_INDEX
-            )
-            for task in range(logits.size(2))
-        )
+        return multitask_cross_entropy(logits, real)

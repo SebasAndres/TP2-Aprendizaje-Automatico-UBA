@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from torch.utils.data import DataLoader
 import numpy as np
@@ -6,6 +7,7 @@ import torch
 
 from src.problem import Problem
 from src.features import TextFeatureExtractor
+from src.metrics.base import WordLevelTask
 from src.training.result import TrainResult
 from src.words import concat_word_ids, token_word_ids
 
@@ -71,8 +73,17 @@ def train_classic_model(
     logger.info("Ajustando %s", type(model).__name__)
     model.fit(X_train, Y_train)
 
-    logger.info("Extrayendo features de test")
-    X_test, Y_test, word_ids_test = _dataloader_to_numpy(test_loader, feature_extractor)
     logger.info("Prediciendo sobre test")
-    pred_test = model.predict(X_test)
-    return TrainResult(model, problem.metric.word_level(pred_test, Y_test, word_ids_test))
+    return TrainResult(model, evaluate_classic_model(model, test_loader, feature_extractor, problem))
+
+
+def evaluate_classic_model(
+    model: Any,
+    loader: DataLoader,
+    feature_extractor: TextFeatureExtractor,
+    problem: Problem
+) -> dict[str, WordLevelTask]:
+    """Predice con un modelo clásico ya ajustado y devuelve las clases reales y predichas
+    a nivel palabra de cada tarea"""
+    X, Y, word_ids = _dataloader_to_numpy(loader, feature_extractor)
+    return problem.metric.word_level(model.predict(X), Y, word_ids)

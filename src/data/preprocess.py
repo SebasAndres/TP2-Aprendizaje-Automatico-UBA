@@ -1,14 +1,17 @@
 from pathlib import Path
 import torch
-from torch.utils.data import Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, random_split
 
 from src.constants import (
-    DATASET_PATH, 
+    BATCH_SIZE,
+    DATASET_PATH,
     CONTROL_RATIO,
     RANDOM_SEED,
     CAPITALIZATION_DATASET_SIZE,
-    PUNCTUATION_DATASET_SIZE
+    PUNCTUATION_DATASET_SIZE,
+    TEST_RATIO,
 )
+from src.data.base import collate_batch
 from src.data.punctuation_dataset import PunctuationDataset
 from src.data.capitalization_dataset import CapitalizationDataset
 
@@ -48,3 +51,19 @@ def split_dataset_dev_control(dataset: Dataset) -> tuple[Dataset, Dataset]:
         generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
     return development_dataset, control_dataset
+
+
+def split_train_test(development_dataset: Dataset) -> tuple[Dataset, Dataset]:
+    """Divide el dataset de desarrollo en train y test. Con la misma semilla, todos los
+    modelos se entrenan y evalúan sobre las mismas oraciones"""
+    train_dataset, test_dataset = random_split(
+        development_dataset,
+        [1 - TEST_RATIO, TEST_RATIO],
+        generator=torch.Generator().manual_seed(RANDOM_SEED)
+    )
+    return train_dataset, test_dataset
+
+
+def build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
+    """DataLoader por batches de oraciones, con las etiquetas rellenadas con IGNORE_INDEX"""
+    return DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=shuffle, num_workers=0, collate_fn=collate_batch)

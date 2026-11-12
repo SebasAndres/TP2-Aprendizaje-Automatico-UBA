@@ -9,6 +9,10 @@ TITLE: Capitalization = 1      # "Hola" (incluye palabras de 1 letra)
 MIXED: Capitalization = 2      # "McDonald's", "iPhone"
 UPPERCASE: Capitalization = 3  # "ONU", "UBA" (más de una letra)
 
+# Nombre legible de cada clase, en el orden de sus valores
+CAPITALIZATION_NAMES = ["minúscula", "Inicial", "MiXta", "MAYÚS"]
+N_CAPITALIZATION_CLASSES = len(CAPITALIZATION_NAMES)
+
 
 def word_capitalization(word: str) -> Capitalization:
     """Clasifica la capitalización de una palabra considerando solo sus letras"""

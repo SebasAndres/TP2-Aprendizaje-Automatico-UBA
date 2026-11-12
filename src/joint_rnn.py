@@ -20,14 +20,20 @@ import sys
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset
 
-from src.constants import BATCH_SIZE, DATASET_PATH, RANDOM_SEED, TEST_RATIO
-from src.data import CapitalizationDataset, PunctuationDataset, collate_batch, split_dataset_dev_control
+from src.constants import DATASET_PATH, RANDOM_SEED
+from src.data import (
+    CapitalizationDataset,
+    PunctuationDataset,
+    build_loader,
+    split_dataset_dev_control,
+    split_train_test,
+)
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 from src.features import EmbeddingsExtractor
 from src.metrics import JointMetric
-from src.metrics.capitalization import N_CAPITALIZATION_CLASSES
+from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
 from src.problem.capitalization.standard_rnn import EMBEDDING_DIM, HIDDEN_DIM
 
 logger = logging.getLogger("src.joint_rnn")
@@ -91,16 +97,9 @@ def create_joint_rnn_model(bidirectional: bool = False) -> JointRNN:
 def _loaders(dataset: Dataset) -> tuple[DataLoader, DataLoader]:
     """Mismos splits y semillas que el pipeline"""
     development_set, _ = split_dataset_dev_control(dataset)
-    train_set, test_set = random_split(
-        development_set,
-        [1 - TEST_RATIO, TEST_RATIO],
-        generator=torch.Generator().manual_seed(RANDOM_SEED)
-    )
+    train_set, test_set = split_train_test(development_set)
     logger.info("Oraciones: train=%d, test=%d", len(train_set), len(test_set))
-    return (
-        DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_batch),
-        DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_batch),
-    )
+    return build_loader(train_set, shuffle=True), build_loader(test_set, shuffle=False)
 
 
 def main() -> None:

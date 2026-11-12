@@ -1,12 +1,9 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 
-from src.data import IGNORE_INDEX
-from src.metrics.base import Metric, WordLevelTask
+from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
+from src.metrics.base import Metric, WordLevelTask, token_cross_entropy
 from src.words import first_token_mask, majority_by_word
-
-N_CAPITALIZATION_CLASSES = 4
 
 
 class CapitalizationMetric(Metric):
@@ -20,10 +17,5 @@ class CapitalizationMetric(Metric):
         return {"capitalizacion": (word_real, word_pred, N_CAPITALIZATION_CLASSES)}
 
     def loss(self, logits: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
-        """CrossEntropy ignorando el padding. Los logits tienen forma (..., n_clases)
-        y las etiquetas (...)"""
-        return F.cross_entropy(
-            logits.reshape(-1, logits.size(-1)),
-            real.reshape(-1),
-            ignore_index=IGNORE_INDEX
-        )
+        """CrossEntropy ignorando el padding. logits: (batch, n_tokens, n_clases), real: (batch, n_tokens)"""
+        return token_cross_entropy(logits, real)

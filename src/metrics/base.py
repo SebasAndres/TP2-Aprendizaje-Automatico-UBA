@@ -2,7 +2,12 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from sklearn.metrics import f1_score, precision_recall_fscore_support
+
+from src.data import IGNORE_INDEX
+from src.data.capitalization_dataset import CAPITALIZATION_NAMES
+from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 
 WordLevelTask = tuple[np.ndarray, np.ndarray, int]
 """(etiquetas reales, predicciones, cantidad de clases) de una tarea, a nivel palabra"""
@@ -11,9 +16,9 @@ PerClass = dict[str, dict[int, tuple[float, float]]]
 """Por tarea, por clase: (precision, recall)"""
 
 CLASS_NAMES = {
-    "capitalizacion": ["minúscula", "Inicial", "MiXta", "MAYÚS"],
-    "punt_inicial": ["nada", "¿"],
-    "punt_final": ["nada", ",", ".", "?"],
+    "capitalizacion": CAPITALIZATION_NAMES,
+    "punt_inicial": [label or "nada" for label in INITIAL_LABELS],
+    "punt_final": [label or "nada" for label in FINAL_LABELS],
 }
 
 
@@ -34,6 +39,17 @@ def precision_recall(real: np.ndarray, pred: np.ndarray, n_classes: int) -> dict
         real, pred, labels=range(n_classes), zero_division=0
     )
     return {c: (float(precision[c]), float(recall[c])) for c in range(n_classes)}
+
+
+def token_cross_entropy(logits: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
+    """CrossEntropy por token ignorando el padding. logits: (..., n_clases), real: (...)"""
+    return F.cross_entropy(logits.reshape(-1, logits.size(-1)), real.reshape(-1), ignore_index=IGNORE_INDEX)
+
+
+def multitask_cross_entropy(logits: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
+    """Suma de la CrossEntropy de cada tarea, ignorando el padding.
+    logits: (batch, n_tokens, n_tareas, n_clases), real: (batch, n_tokens, n_tareas)"""
+    return sum(token_cross_entropy(logits[:, :, task], real[:, :, task]) for task in range(logits.size(2)))
 
 
 def scores_from_tasks(tasks: dict[str, WordLevelTask]) -> dict[str, float]:

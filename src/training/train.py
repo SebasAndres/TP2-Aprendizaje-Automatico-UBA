@@ -6,10 +6,10 @@ from pathlib import Path
 
 import joblib
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader
 
-from src.constants import BATCH_SIZE, MODELS_DIR, RANDOM_SEED, RUN_SEPARATOR, TEST_RATIO
-from src.data import collate_batch
+from src.constants import MODELS_DIR, RUN_SEPARATOR
+from src.data import build_loader, split_train_test
 from src.features import (
     AverageEmbeddingsExtractor,
     ClassicFeatureExtractor,
@@ -17,9 +17,9 @@ from src.features import (
     TextFeatureExtractor,
 )
 from src.problem import Problem
-from src.training.classic import train_classic_model
-from src.training.joint import train_joint_model
-from src.training.neural import neural_trainer
+from src.training.classic import evaluate_classic_model, train_classic_model
+from src.training.joint import evaluate_joint_model, train_joint_model
+from src.training.neural import Evaluator, evaluate_problem_network, neural_trainer
 from src.training.plots import save_class_metrics_plot, save_confusion_matrices, save_training_plot
 from src.training.result import TrainResult, format_score
 
@@ -27,9 +27,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class Experiment:
-    """Un modelo a entrenar junto con el extractor de features que recibe"""
+    """Un modelo a entrenar junto con el extractor de features que recibe y cómo predecir
+    con él una vez entrenado (para evaluarlo sobre control)"""
     name: str
     trainer: Callable[[DataLoader, DataLoader, TextFeatureExtractor, Problem], TrainResult]
+    evaluator: Evaluator
     feature_extractor: TextFeatureExtractor
 
 
@@ -37,43 +39,47 @@ def build_experiments() -> list[Experiment]:
     """Define las combinaciones de modelo y features que pide el enunciado"""
     embeddings = EmbeddingsExtractor()
     return [
-        Experiment("classic_features", train_classic_model, ClassicFeatureExtractor()),
-        Experiment("classic_embeddings", train_classic_model, AverageEmbeddingsExtractor()),
-        Experiment("standard_rnn", neural_trainer(lambda problem: problem.standard_rnn_model()), embeddings),
-        Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()), embeddings),
-        Experiment("joint_rnn", train_joint_model, embeddings),
+        Experiment("classic_features", train_classic_model, evaluate_classic_model, ClassicFeatureExtractor()),
+        Experiment("classic_embeddings", train_classic_model, evaluate_classic_model, AverageEmbeddingsExtractor()),
+        Experiment("standard_rnn", neural_trainer(lambda problem: problem.standard_rnn_model()),
+                   evaluate_problem_network, embeddings),
+        Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()),
+                   evaluate_problem_network, embeddings),
+        Experiment("joint_rnn", train_joint_model, evaluate_joint_model, embeddings),
     ]
 
 
-def _build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
-    return DataLoader(
-        dataset=dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=shuffle,
-        num_workers=0,
-        collate_fn=collate_batch
-    )
-
-def _run_suffix(dataset_size: int) -> str:
-    """Sufijo común a todos los archivos de una corrida: fecha de ejecución y tamaño del dataset.
-    Así las corridas no se pisan entre sí. Ej: '__2026-11-12_19-30__n5000'"""
-    date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    return f"{RUN_SEPARATOR}{date}{RUN_SEPARATOR}n{dataset_size}"
+def _run_dir(problem_name: str) -> Path:
+    """Carpeta del día de la corrida: models/<Problema>/<día>. Ej: 'models/PunctuationProblem/2026-11-12'"""
+    model_dir = Path(MODELS_DIR) / problem_name / datetime.now().strftime("%Y-%m-%d")
+    model_dir.mkdir(parents=True, exist_ok=True)
+    return model_dir
 
 
-def _save_experiment(name: str, result: TrainResult, model_dir: Path, problem_name: str, suffix: str) -> None:
+def _file_stem(model_dir: Path, name: str, result: TrainResult, hour: str) -> Path:
+    """<score>__<hora>__<modelo>, con el score como el promedio del F1 macro de sus tareas.
+    Así, ordenados por nombre, los mejores modelos del día quedan al final. No usar
+    with_suffix sobre el resultado: tomaría el punto del score como extensión"""
+    mean_score = sum(result.score.values()) / len(result.score) if result.score else 0.0
+    return model_dir / RUN_SEPARATOR.join((f"{mean_score:.3f}", hour, name))
+
+
+def _with_ext(file_stem: Path, extension: str) -> Path:
+    return file_stem.with_name(file_stem.name + extension)
+
+
+def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_name: str) -> None:
     """Guarda el modelo entrenado y su gráfico. Las redes guardan sus pesos (.pkl) y los
     modelos clásicos el objeto completo (.joblib). El gráfico es la evolución por época si
     entrena por épocas, o la precision/recall por clase sobre test si no (modelos clásicos)"""
-    file_stem = model_dir / f"{name}{suffix}"
     if isinstance(result.model, torch.nn.Module):
-        torch.save(result.model.state_dict(), file_stem.with_suffix(".pkl"))
+        torch.save(result.model.state_dict(), _with_ext(file_stem, ".pkl"))
     elif result.model is not None:
-        joblib.dump(result.model, file_stem.with_suffix(".joblib"), compress=3)
+        joblib.dump(result.model, _with_ext(file_stem, ".joblib"), compress=3)
     if result.history:
-        save_training_plot(result.history, file_stem.with_suffix(".png"), f"{problem_name} · {name} (train)")
+        save_training_plot(result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train)")
     elif result.test_tasks:
-        save_class_metrics_plot(result.per_class, file_stem.with_suffix(".png"), f"{problem_name} · {name} (test)")
+        save_class_metrics_plot(result.per_class, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (test)")
 
 
 def train_models(
@@ -86,26 +92,41 @@ def train_models(
     Inicialmente probamos los mismos modelos para ambos problemas.
     Al final guarda las matrices de confusión sobre test de todos los modelos.
     """
-    train_dataset, test_dataset = random_split(
-        development_dataset,
-        [1-TEST_RATIO, TEST_RATIO],
-        generator=torch.Generator().manual_seed(RANDOM_SEED)
-    )
+    train_dataset, test_dataset = split_train_test(development_dataset)
     logger.info("Split: train=%d, test=%d", len(train_dataset), len(test_dataset))
-    train_loader = _build_loader(train_dataset, shuffle=True)
-    test_loader = _build_loader(test_dataset, shuffle=False)
+    train_loader = build_loader(train_dataset, shuffle=True)
+    test_loader = build_loader(test_dataset, shuffle=False)
 
     problem_name = problem.__class__.__name__
-    model_dir = Path(MODELS_DIR) / problem_name
-    model_dir.mkdir(parents=True, exist_ok=True)
-    suffix = _run_suffix(len(development_dataset))
+    model_dir = _run_dir(problem_name)
+    hour = datetime.now().strftime("%H-%M")
     results = {}
     for experiment in experiments:
         logger.info("Entrenando modelo %s", experiment.name)
         result = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
-        _save_experiment(experiment.name, result, model_dir, problem_name, suffix)
+        _save_experiment(experiment.name, result, _file_stem(model_dir, experiment.name, result, hour), problem_name)
         logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(result.score))
         results[experiment.name] = result
 
-    save_confusion_matrices(results, model_dir / f"confusion_matrices{suffix}.png", f"{problem_name} · matrices de confusión (test)")
+    save_confusion_matrices(results, model_dir / f"{hour}{RUN_SEPARATOR}confusion_matrices.png", f"{problem_name} · matrices de confusión (test)")
     return results
+
+
+def evaluate_on_control(
+    control_dataset: Dataset,
+    experiment: Experiment,
+    result: TrainResult,
+    problem: Problem
+) -> TrainResult:
+    """Evalúa sobre control el modelo ya entrenado del experimento. Devuelve un TrainResult
+    cuyas tareas son las de control, y guarda en la carpeta del día su precision/recall por
+    clase y sus matrices de confusión"""
+    loader = build_loader(control_dataset, shuffle=False)
+    control = TrainResult(result.model, experiment.evaluator(result.model, loader, experiment.feature_extractor, problem))
+
+    problem_name = problem.__class__.__name__
+    file_stem = _run_dir(problem_name) / RUN_SEPARATOR.join((datetime.now().strftime("%H-%M"), "control", experiment.name))
+    title = f"{problem_name} · {experiment.name} (control)"
+    save_class_metrics_plot(control.per_class, _with_ext(file_stem, ".png"), title)
+    save_confusion_matrices({experiment.name: control}, _with_ext(file_stem, "_confusion.png"), title)
+    return control

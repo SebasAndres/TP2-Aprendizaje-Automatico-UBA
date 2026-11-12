@@ -17,6 +17,7 @@ Para agregar una red nueva:
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import torch
@@ -43,6 +44,9 @@ ModelFactory = Callable[[Problem], nn.Module]
 
 Trainer = Callable[[DataLoader, DataLoader, TextFeatureExtractor, Problem], TrainResult]
 """Firma que espera `Experiment.trainer`"""
+
+Evaluator = Callable[[Any, DataLoader, TextFeatureExtractor, Problem], dict[str, WordLevelTask]]
+"""Firma que espera `Experiment.evaluator`: predice con un modelo ya entrenado"""
 
 
 class PredictionLog:
@@ -215,6 +219,30 @@ def train_neural_model(
     logger.info("Prediciendo sobre test")
     test_tasks = _evaluate(model, test_loader, feature_extractor, metric, device)
     return TrainResult(model.cpu(), test_tasks, history)
+
+
+def evaluate_neural_model(
+    model: nn.Module,
+    loader: DataLoader,
+    feature_extractor: TextFeatureExtractor,
+    metric: Metric
+) -> dict[str, WordLevelTask]:
+    """Predice con una red ya entrenada (en CPU) y devuelve las clases reales y predichas
+    a nivel palabra de cada tarea. La red vuelve a quedar en CPU"""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tasks = _evaluate(model.to(device), loader, feature_extractor, metric, device)
+    model.cpu()
+    return tasks
+
+
+def evaluate_problem_network(
+    model: nn.Module,
+    loader: DataLoader,
+    feature_extractor: TextFeatureExtractor,
+    problem: Problem
+) -> dict[str, WordLevelTask]:
+    """`evaluate_neural_model` con la métrica del problema, con la firma de `Experiment.evaluator`"""
+    return evaluate_neural_model(model, loader, feature_extractor, problem.metric)
 
 
 def neural_trainer(build_model: ModelFactory) -> Trainer:

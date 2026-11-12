@@ -1,7 +1,7 @@
 import logging
 
 from src.data import preprocess_dataset, split_dataset_dev_control
-from src.training import build_experiments, train_models
+from src.training import build_experiments, evaluate_on_control, train_models
 from src.training.result import format_score
 from src.problem import CapitalizationProblem, PunctuationProblem
 
@@ -59,8 +59,16 @@ if __name__ == '__main__':
             )
 
             # Evaluamos performance sobre control para report
-            # TODO
-            
+            logger.info("Evaluando %s sobre control", winning_experiment)
+            experiment = next(e for e in experiments if e.name == winning_experiment)
+            control_result = evaluate_on_control(
+                control_set, experiment, experiment_results[winning_experiment], problem
+            )
+            logger.info(
+                "Ganador en control: %s (%s)",
+                winning_experiment, format_score(control_result.score)
+            )
+
 
         logger.info("Pipeline finalizado")
 

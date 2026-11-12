@@ -17,9 +17,9 @@ from src.features import (
     TextFeatureExtractor,
 )
 from src.problem import Problem
-from src.training.classic import train_classic_model
-from src.training.joint import train_joint_model
-from src.training.neural import neural_trainer
+from src.training.classic import evaluate_classic_model, train_classic_model
+from src.training.joint import evaluate_joint_model, train_joint_model
+from src.training.neural import Evaluator, evaluate_problem_network, neural_trainer
 from src.training.plots import save_class_metrics_plot, save_confusion_matrices, save_training_plot
 from src.training.result import TrainResult, format_score
 
@@ -27,9 +27,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class Experiment:
-    """Un modelo a entrenar junto con el extractor de features que recibe"""
+    """Un modelo a entrenar junto con el extractor de features que recibe y cómo predecir
+    con él una vez entrenado (para evaluarlo sobre control)"""
     name: str
     trainer: Callable[[DataLoader, DataLoader, TextFeatureExtractor, Problem], TrainResult]
+    evaluator: Evaluator
     feature_extractor: TextFeatureExtractor
 
 
@@ -37,11 +39,13 @@ def build_experiments() -> list[Experiment]:
     """Define las combinaciones de modelo y features que pide el enunciado"""
     embeddings = EmbeddingsExtractor()
     return [
-        Experiment("classic_features", train_classic_model, ClassicFeatureExtractor()),
-        Experiment("classic_embeddings", train_classic_model, AverageEmbeddingsExtractor()),
-        Experiment("standard_rnn", neural_trainer(lambda problem: problem.standard_rnn_model()), embeddings),
-        Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()), embeddings),
-        Experiment("joint_rnn", train_joint_model, embeddings),
+        Experiment("classic_features", train_classic_model, evaluate_classic_model, ClassicFeatureExtractor()),
+        Experiment("classic_embeddings", train_classic_model, evaluate_classic_model, AverageEmbeddingsExtractor()),
+        Experiment("standard_rnn", neural_trainer(lambda problem: problem.standard_rnn_model()),
+                   evaluate_problem_network, embeddings),
+        Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()),
+                   evaluate_problem_network, embeddings),
+        Experiment("joint_rnn", train_joint_model, evaluate_joint_model, embeddings),
     ]
 
 
@@ -106,3 +110,23 @@ def train_models(
 
     save_confusion_matrices(results, model_dir / f"{hour}{RUN_SEPARATOR}confusion_matrices.png", f"{problem_name} · matrices de confusión (test)")
     return results
+
+
+def evaluate_on_control(
+    control_dataset: Dataset,
+    experiment: Experiment,
+    result: TrainResult,
+    problem: Problem
+) -> TrainResult:
+    """Evalúa sobre control el modelo ya entrenado del experimento. Devuelve un TrainResult
+    cuyas tareas son las de control, y guarda en la carpeta del día su precision/recall por
+    clase y sus matrices de confusión"""
+    loader = build_loader(control_dataset, shuffle=False)
+    control = TrainResult(result.model, experiment.evaluator(result.model, loader, experiment.feature_extractor, problem))
+
+    problem_name = problem.__class__.__name__
+    file_stem = _run_dir(problem_name) / RUN_SEPARATOR.join((datetime.now().strftime("%H-%M"), "control", experiment.name))
+    title = f"{problem_name} · {experiment.name} (control)"
+    save_class_metrics_plot(control.per_class, _with_ext(file_stem, ".png"), title)
+    save_confusion_matrices({experiment.name: control}, _with_ext(file_stem, "_confusion.png"), title)
+    return control

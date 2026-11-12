@@ -40,6 +40,35 @@ class PunctuationDataset(TextDataset):
         Devuelve un tensor (n_tokens, 2) con <PuntuacionInicial, PuntuacionFinal> para cada token.
         La inicial va al primer token de la palabra y la final al último. Los signos sueltos
         (palabras sin tokens, ej: "¿ qué ?") se asignan al token siguiente o anterior.
+
+        Cada fila es [inicial, final]. Los valores son índices de INITIAL_LABELS y FINAL_LABELS:
+            inicial: 0 = "", 1 = "¿"
+            final:   0 = "", 1 = ",", 2 = ".", 3 = "?"
+
+        Ejemplo: "¿Cuándo vamos a McDonald's? Ellos no vienen hoy."
+            token    inicial  final
+            cu          1       0     <- "¿" va al primer token de la palabra
+            ##ánd       0       0
+            ##o         0       0
+            va          0       0
+            ##mos       0       0
+            a           0       0
+            m           0       0
+            ##c         0       0
+            ##dona      0       0
+            ##ld        0       0
+            '           0       0
+            s           0       3     <- "?" va al último token de la palabra
+            ellos       0       0
+            no          0       0
+            viene       0       0
+            ##n         0       0
+            hoy         0       2     <- "."
+
+        Un token puede tener las dos: "¿Qué?" -> qué -> [[1, 3]]
+        Un signo suelto se pega al token anterior: "Hola , la" -> hol, ##a, la -> [[0, 0], [0, 1], [0, 0]]
+
+        Para reconstruir: INITIAL_LABELS[y[i][0]] + token + FINAL_LABELS[y[i][1]]
         """
         labels: list[list[Puntuacion]] = []
         pending_initial = NO_PUNCTUATION

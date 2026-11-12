@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 from src.metrics.base import Metric, macro_f1
@@ -19,4 +20,19 @@ class PunctuationMetric(Metric):
         }
 
     def loss(self, logits: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError("PunctuationMetric.loss todavía no está implementado")
+        # logits: (batch, n_tokens, 2_tareas, 4_clases)
+        # real: (batch, n_tokens, 2_tareas)
+        
+        # Aplanamos los tensores para PyTorch: (N, C) y (N,)
+        logits_ini = logits[:, :, 0, :].reshape(-1, 4)
+        real_ini = real[:, :, 0].reshape(-1)
+        
+        logits_fin = logits[:, :, 1, :].reshape(-1, 4)
+        real_fin = real[:, :, 1].reshape(-1)
+        
+        # Calculamos la entropía cruzada ignorando el padding (-100)
+        loss_ini = F.cross_entropy(logits_ini, real_ini, ignore_index=-100)
+        loss_fin = F.cross_entropy(logits_fin, real_fin, ignore_index=-100)
+        
+        # El error total de la red es la suma de ambos errores
+        return loss_ini + loss_fin

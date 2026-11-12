@@ -36,6 +36,7 @@ from transformers import BertTokenizer
 
 from src.constants import EMBEDDINGS_MODEL, MODELS_DIR, RUN_SEPARATOR
 from src.data import strip_punctuation
+from src.data.capitalization_dataset import LOWERCASE, MIXED, TITLE, UPPERCASE
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 from src.features import (
     AverageEmbeddingsExtractor,
@@ -64,7 +65,7 @@ CLASSIC_EXTRACTORS: dict[str, type[TextFeatureExtractor]] = {
 }
 
 Capitalizations = list[int]
-"""Clase de capitalización de cada palabra: 0 minúscula, 1 inicial, 2 mixta, 3 mayúscula"""
+"""Clase de capitalización de cada palabra (LOWERCASE, TITLE, MIXED o UPPERCASE)"""
 
 Punctuations = list[tuple[int, int]]
 """(puntuación inicial, puntuación final) de cada palabra: índices de INITIAL_LABELS y FINAL_LABELS"""
@@ -191,9 +192,14 @@ def predict_punctuation(model: LoadedModel | None, word_tokens: list[list[str]])
 
 
 def capitalize(word: str, capitalization: int) -> str:
-    """0 = minúscula, 1 = inicial, 2 = mixta, 3 = mayúscula. La mixta (ej: "McDonald's") no
-    dice qué letras van en mayúscula, así que se marca con un * y queda en minúscula"""
-    return {0: word, 1: word.capitalize(), 2: f"{word}*", 3: word.upper()}[capitalization]
+    """Aplica la clase de capitalización a la palabra. La mixta (ej: "McDonald's") no dice
+    qué letras van en mayúscula, así que se marca con un * y queda en minúscula"""
+    return {
+        LOWERCASE: word,
+        TITLE: word.capitalize(),
+        MIXED: f"{word}*",
+        UPPERCASE: word.upper(),
+    }[capitalization]
 
 
 def apply_capitalization(words: list[str], capitalizations: Capitalizations | None) -> list[str]:

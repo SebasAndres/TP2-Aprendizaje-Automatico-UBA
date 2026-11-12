@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from sklearn.metrics import f1_score, precision_recall_fscore_support
 
 from src.data import IGNORE_INDEX
+from src.data.capitalization_dataset import CAPITALIZATION_NAMES
+from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 
 WordLevelTask = tuple[np.ndarray, np.ndarray, int]
 """(etiquetas reales, predicciones, cantidad de clases) de una tarea, a nivel palabra"""
@@ -14,9 +16,9 @@ PerClass = dict[str, dict[int, tuple[float, float]]]
 """Por tarea, por clase: (precision, recall)"""
 
 CLASS_NAMES = {
-    "capitalizacion": ["minúscula", "Inicial", "MiXta", "MAYÚS"],
-    "punt_inicial": ["nada", "¿"],
-    "punt_final": ["nada", ",", ".", "?"],
+    "capitalizacion": CAPITALIZATION_NAMES,
+    "punt_inicial": [label or "nada" for label in INITIAL_LABELS],
+    "punt_final": [label or "nada" for label in FINAL_LABELS],
 }
 
 

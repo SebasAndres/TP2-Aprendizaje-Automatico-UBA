@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from src.constants import RANDOM_SEED
-from src.metrics.capitalization import N_CAPITALIZATION_CLASSES
+from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
 
 EMBEDDING_DIM = 768  # tamaño de los embeddings estáticos de BERT
 HIDDEN_DIM = 128     # tamaño del estado oculto h_t (hiperparámetro)

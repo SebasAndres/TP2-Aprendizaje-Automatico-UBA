@@ -1,10 +1,9 @@
 import numpy as np
 import torch
 
+from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
 from src.metrics.base import Metric, WordLevelTask, token_cross_entropy
 from src.words import first_token_mask, majority_by_word
-
-N_CAPITALIZATION_CLASSES = 4
 
 
 class CapitalizationMetric(Metric):

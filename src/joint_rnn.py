@@ -27,7 +27,7 @@ from src.data import CapitalizationDataset, PunctuationDataset, collate_batch, s
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 from src.features import EmbeddingsExtractor
 from src.metrics import JointMetric
-from src.metrics.capitalization import N_CAPITALIZATION_CLASSES
+from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
 from src.problem.capitalization.standard_rnn import EMBEDDING_DIM, HIDDEN_DIM
 
 logger = logging.getLogger("src.joint_rnn")

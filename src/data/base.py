@@ -15,6 +15,11 @@ def strip_punctuation(word: str) -> str:
     return word.strip(PUNCTUATION_MARKS)
 
 
+def normalize_word(word: str) -> str:
+    """La palabra como la ven los modelos: sin puntuación en los bordes y en minúsculas"""
+    return strip_punctuation(word).lower()
+
+
 def collate_batch(
     batch: list[tuple[list[str], torch.Tensor]],
 ) -> tuple[list[list[str]], torch.Tensor]:
@@ -46,7 +51,7 @@ class TextDataset(Dataset):
 
     def _tokenize_words(self, words: list[str]) -> list[list[str]]:
         """Tokeniza cada palabra normalizada (sin puntuación y en minúsculas)"""
-        return [self.tokenizer.tokenize(strip_punctuation(word).lower()) for word in words]
+        return [self.tokenizer.tokenize(normalize_word(word)) for word in words]
 
     def __len__(self) -> int:
         return self.len

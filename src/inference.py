@@ -21,13 +21,13 @@ conjunta, la red conjunta predice los dos.
 """
 from argparse import ArgumentParser
 from dataclasses import dataclass
-from collections import Counter
 from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 import questionary
 import torch
 import transformers
@@ -35,7 +35,7 @@ from torch import nn
 from transformers import BertTokenizer
 
 from src.constants import EMBEDDINGS_MODEL, MODELS_DIR, RUN_SEPARATOR
-from src.data import strip_punctuation
+from src.data import normalize_word
 from src.data.capitalization_dataset import LOWERCASE, MIXED, TITLE, UPPERCASE
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 from src.features import (
@@ -47,6 +47,8 @@ from src.features import (
 from src.joint_rnn import create_joint_rnn_model
 from src.metrics.base import class_name
 from src.problem import CapitalizationProblem, Problem, PunctuationProblem
+from src.training.neural import predict
+from src.words import first_token_mask, last_token_mask, majority_by_word
 
 PROBLEMS: dict[str, Problem] = {
     "CapitalizationProblem": CapitalizationProblem(),
@@ -124,9 +126,7 @@ class LoadedModel:
         Así la capitalización siempre es la primera columna y la puntuación las dos últimas"""
         features = self.extractor.extract(tokens)  # (n_tokens, n_features)
         if isinstance(self.model, nn.Module):
-            with torch.no_grad():
-                logits = self.model(features.unsqueeze(0), [len(tokens)])[0]
-            pred = logits.argmax(dim=-1)
+            pred = predict(self.model, features.unsqueeze(0), [len(tokens)])[0]
         else:
             pred = torch.as_tensor(self.model.predict(features.numpy()))
         return pred.reshape(len(tokens), -1)
@@ -137,7 +137,7 @@ def tokenize(text: str, tokenizer: BertTokenizer) -> tuple[list[str], list[list[
     (signos sueltos). Devuelve las palabras normalizadas y los tokens de cada una"""
     words, word_tokens = [], []
     for word in text.split():
-        normalized = strip_punctuation(word).lower()
+        normalized = normalize_word(word)
         tokens = tokenizer.tokenize(normalized)
         if tokens:
             words.append(normalized)
@@ -145,9 +145,9 @@ def tokenize(text: str, tokenizer: BertTokenizer) -> tuple[list[str], list[list[
     return words, word_tokens
 
 
-def _split_by_word(pred: torch.Tensor, word_tokens: list[list[str]]) -> list[list]:
-    """Agrupa las filas de `pred` (una por token) en una lista por palabra"""
-    return [rows.tolist() for rows in torch.split(pred, [len(tokens) for tokens in word_tokens])]
+def _word_ids(word_tokens: list[list[str]]) -> np.ndarray:
+    """Índice de la palabra de cada token. Ej: [["hol", "##a"], ["la"]] -> [0, 0, 1]"""
+    return np.repeat(np.arange(len(word_tokens)), [len(tokens) for tokens in word_tokens])
 
 
 def _all_tokens(word_tokens: list[list[str]]) -> list[str]:
@@ -178,8 +178,8 @@ def predict_capitalization(model: LoadedModel | None, word_tokens: list[list[str
     None si no hay modelo"""
     if model is None:
         return None
-    pred = model.predict(_all_tokens(word_tokens))[:, 0]  # primera columna
-    return [Counter(classes).most_common(1)[0][0] for classes in _split_by_word(pred, word_tokens)]
+    pred = model.predict(_all_tokens(word_tokens))[:, 0].numpy()  # primera columna
+    return majority_by_word(pred, _word_ids(word_tokens)).tolist()
 
 
 def predict_punctuation(model: LoadedModel | None, word_tokens: list[list[str]]) -> Punctuations | None:
@@ -187,8 +187,11 @@ def predict_punctuation(model: LoadedModel | None, word_tokens: list[list[str]])
     métrica. None si no hay modelo"""
     if model is None:
         return None
-    pred = model.predict(_all_tokens(word_tokens))[:, -2:]  # dos últimas columnas: [inicial, final]
-    return [(rows[0][0], rows[-1][1]) for rows in _split_by_word(pred, word_tokens)]
+    pred = model.predict(_all_tokens(word_tokens))[:, -2:].numpy()  # dos últimas columnas: [inicial, final]
+    word_ids = _word_ids(word_tokens)
+    initials = pred[first_token_mask(word_ids), 0].tolist()
+    finals = pred[last_token_mask(word_ids), 1].tolist()
+    return list(zip(initials, finals))
 
 
 def capitalize(word: str, capitalization: int) -> str:

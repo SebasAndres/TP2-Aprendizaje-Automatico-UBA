@@ -37,7 +37,7 @@ from src.features import EmbeddingsExtractor, TextFeatureExtractor
 from src.metrics import CapitalizationMetric, PunctuationMetric
 from src.metrics.capitalization import N_CAPITALIZATION_CLASSES
 from src.problem.capitalization.standard_rnn import EMBEDDING_DIM, HIDDEN_DIM
-from src.training.standard_rnn import LEARNING_RATE, N_EPOCHS, _batch_to_tensors
+from src.training.neural import LEARNING_RATE, N_EPOCHS, batch_to_tensors
 from src.words import concat_word_ids, token_word_ids
 
 logger = logging.getLogger("src.joint_rnn")
@@ -117,7 +117,7 @@ def train(
         model.train()
         total_loss, n_batches = 0.0, 0
         for batch_X, batch_y in dataloader:
-            batch = _batch_to_tensors(batch_X, batch_y, feature_extractor)
+            batch = batch_to_tensors(batch_X, batch_y, feature_extractor)
             if batch is None:
                 continue
             X, Y, tokens = batch
@@ -144,7 +144,7 @@ def evaluate(
     preds, reals, word_ids = [], [], []
     with torch.no_grad():
         for batch_X, batch_y in dataloader:
-            batch = _batch_to_tensors(batch_X, batch_y, feature_extractor)
+            batch = batch_to_tensors(batch_X, batch_y, feature_extractor)
             if batch is None:
                 continue
             X, Y, tokens = batch

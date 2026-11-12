@@ -15,9 +15,8 @@ from src.features import (
     TextFeatureExtractor,
 )
 from src.problem import Problem
-from src.training.bidirectional_rnn import train_bidirectional_rnn_model
 from src.training.classic import train_classic_model
-from src.training.standard_rnn import train_standard_rnn_model
+from src.training.neural import neural_trainer
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +34,9 @@ def build_experiments() -> list[Experiment]:
     return [
         Experiment("classic_features", train_classic_model, ClassicFeatureExtractor()),
         Experiment("classic_embeddings", train_classic_model, AverageEmbeddingsExtractor()),
-        Experiment("standard_rnn", train_standard_rnn_model, embeddings),
-        Experiment("bidirectional_rnn", train_bidirectional_rnn_model, embeddings),
+        # Cualquier red neuronal se entrena con el mismo loop: solo cambia cuál se construye
+        Experiment("standard_rnn", neural_trainer(lambda problem: problem.standard_rnn_model()), embeddings),
+        Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()), embeddings),
     ]
 
 

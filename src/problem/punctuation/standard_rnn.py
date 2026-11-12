@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from src.constants import RANDOM_SEED
 
@@ -27,12 +28,16 @@ class PunctuationRNN(nn.Module):
         # Cabeza para Puntuación Final (4 clases: "", ",", ".", "?")
         self.out_fin = nn.Linear(hidden_dim, 4)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
         """
-        x: (batch, n_tokens, input_dim) 
+        x: (batch, n_tokens, input_dim), lengths: tokens reales de cada oración
         -> logits: (batch, n_tokens, 2 tareas, 4 clases)
         """
-        h, _ = self.rnn(x)  # (batch, n_tokens, hidden_dim)
+        # pack/pad: la RNN saltea el padding (en la bidireccional, la lectura hacia atrás
+        # empezaría por los ceros de relleno)
+        packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+        h, _ = self.rnn(packed)
+        h, _ = pad_packed_sequence(h, batch_first=True, total_length=x.size(1))  # (batch, n_tokens, hidden_dim)
         
         logits_ini = self.out_ini(h)  # (batch, n_tokens, 2)
         logits_fin = self.out_fin(h)  # (batch, n_tokens, 4)

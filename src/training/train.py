@@ -1,13 +1,13 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from src.joint_rnn import JointRNN
-from src.constants import BATCH_SIZE, RANDOM_SEED, TEST_RATIO
+from src.constants import BATCH_SIZE, MODELS_DIR, RANDOM_SEED, TEST_RATIO
 from src.data import collate_batch
 from src.features import (
     AverageEmbeddingsExtractor,
@@ -17,7 +17,8 @@ from src.features import (
 )
 from src.problem import Problem
 from src.training.classic import train_classic_model
-from src.training.neural import neural_trainer
+from src.training.neural import format_score, neural_trainer
+from src.training.plots import save_training_plot
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 class Experiment:
     """Un modelo a entrenar junto con el extractor de features que recibe"""
     name: str
-    trainer: Callable[..., tuple[Any, dict[str, float]]]
+    trainer: Callable[..., tuple[Any, dict[str, float], list]]
     feature_extractor: TextFeatureExtractor
 
 
@@ -37,7 +38,6 @@ def build_experiments() -> list[Experiment]:
         Experiment("classic_embeddings", train_classic_model, AverageEmbeddingsExtractor()),
         Experiment("standard_rnn", neural_trainer(lambda problem: problem.standard_rnn_model()), embeddings),
         Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()), embeddings),
-        Experiment("joint_rnn", neural_trainer(lambda _: JointRNN()), embeddings),
     ]
 
 
@@ -73,11 +73,16 @@ def train_models(
     results = {}
     for experiment in experiments:
         logger.info("Entrenando modelo %s", experiment.name)
-        model, score = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
+        model, score, history = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
 
         if isinstance(model, torch.nn.Module):
-            torch.save(model.state_dict(), f"/models/{problem.__class__.__name__}/{experiment.name}.pkl")
-        
-        logger.info("Modelo %s terminado: score=%s", experiment.name, score)
-        results[experiment.name] = {"model": model, "score": score}
+            model_dir = Path(MODELS_DIR) / problem.__class__.__name__
+            model_dir.mkdir(parents=True, exist_ok=True)
+            torch.save(model.state_dict(), model_dir / f"{experiment.name}.pkl")
+            if history:
+                title = f"{problem.__class__.__name__} · {experiment.name} (train)"
+                save_training_plot(history, model_dir / f"{experiment.name}.png", title)
+
+        logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(score))
+        results[experiment.name] = {"model": model, "score": score, "history": history}
     return results

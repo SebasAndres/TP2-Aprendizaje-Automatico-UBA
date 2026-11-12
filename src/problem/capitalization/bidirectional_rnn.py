@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from src.constants import RANDOM_SEED
 from src.metrics.capitalization import N_CAPITALIZATION_CLASSES
@@ -21,8 +22,12 @@ class CapitalizationBidirectionalRNN(nn.Module):
         # 2. Multiplicamos la entrada por 2 porque ahora concatena ambas memorias
         self.out = nn.Linear(hidden_dim * 2, n_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h, _ = self.rnn(x) 
+    def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
+        # pack/pad: la RNN saltea el padding (en la bidireccional, la lectura hacia atrás
+        # empezaría por los ceros de relleno)
+        packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+        h, _ = self.rnn(packed)
+        h, _ = pad_packed_sequence(h, batch_first=True, total_length=x.size(1))
         return self.out(h)
 
 def create_bidirectional_rnn_model() -> CapitalizationBidirectionalRNN:

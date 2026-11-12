@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from torch.utils.data import DataLoader
 import numpy as np
@@ -61,7 +62,7 @@ def train_classic_model(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem
-) -> tuple[any, dict[str, float]]:
+) -> tuple[Any, dict[str, float], list]:
 
     logger.info("Extrayendo features de train")
     X_train, Y_train, _ = _dataloader_to_numpy(train_loader, feature_extractor)
@@ -75,4 +76,4 @@ def train_classic_model(
     pred_test = model.predict(X_test)
     score = problem.metric.score(pred_test, Y_test, word_ids_test)
 
-    return model, score
+    return model, score, []  # sin épocas: no hay historial

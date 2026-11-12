@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from src.constants import RANDOM_SEED
 
@@ -20,8 +21,12 @@ class PunctuationBidirectionalRNN(nn.Module):
         self.out_ini = nn.Linear(hidden_dim * 2, 2)
         self.out_fin = nn.Linear(hidden_dim * 2, 4)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h, _ = self.rnn(x)
+    def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
+        # pack/pad: la RNN saltea el padding (en la bidireccional, la lectura hacia atrás
+        # empezaría por los ceros de relleno)
+        packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+        h, _ = self.rnn(packed)
+        h, _ = pad_packed_sequence(h, batch_first=True, total_length=x.size(1))
         
         logits_ini = self.out_ini(h)
         logits_fin = self.out_fin(h)

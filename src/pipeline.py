@@ -2,9 +2,18 @@ import logging
 
 from src.data import preprocess_dataset, split_dataset_dev_control
 from src.training import build_experiments, train_models
+from src.training.neural import format_score
 from src.problem import CapitalizationProblem, PunctuationProblem
 
 logger = logging.getLogger("src.pipeline")
+
+
+def overall_score(score: dict[str, float]) -> float:
+    """Resume el F1 de cada tarea en un número para comparar experimentos: el promedio.
+    Un experimento sin score (red sin implementar) queda último"""
+    if not score:
+        return float("-inf")
+    return sum(score.values()) / len(score)
 
 if __name__ == '__main__':
 
@@ -40,10 +49,13 @@ if __name__ == '__main__':
             experiment_results = train_models(development_set, experiments, problem)
 
             # Elegimos el modelo ganador
-            winning_experiment = max(experiment_results, key=lambda k: experiment_results[k]["score"])            
+            winning_experiment = max(
+                experiment_results,
+                key=lambda name: overall_score(experiment_results[name]["score"])
+            )
             logger.info(
-                f"El experimento que mejor performó para TEST fue {winning_experiment} "
-                f"performó con un score={experiment_results[winning_experiment]}"
+                "Ganador en test: %s (%s)",
+                winning_experiment, format_score(experiment_results[winning_experiment]["score"])
             )
 
             # Evaluamos performance sobre control para report

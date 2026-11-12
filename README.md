@@ -1,15 +1,18 @@
 # tp aa2
 
-> Ver [PENDIENTES](PENDIENTES.md) y [Entrenar en Google Colab](docs/google-colab-training.md) 👀
+Antes de la primera ejecucion ejecutar para sincronizar el entorno
+~~~bash
+uv sync
+~~~
 
-Para ejecutar se usa
+Para ejecutar el entrenamiento se usa
 ~~~bash
 uv run python -m src.pipeline
 ~~~
 
-Antes de la primera ejecucion ejecutar para sincronizar el entorno
+Para probar RT los modelos se usa
 ~~~bash
-uv sync
+uv run python -m src.inference
 ~~~
 
 ## RNN conjunta (prototipo)

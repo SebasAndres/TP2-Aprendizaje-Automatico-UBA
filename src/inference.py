@@ -3,7 +3,8 @@
 Pide un texto, lo normaliza igual que el dataset (minúsculas y sin puntuación), corre los
 modelos y reconstruye el texto con la capitalización y la puntuación predichas.
 
-Sin argumentos abre un menú para elegir los modelos guardados en models/ y probar textos:
+Sin argumentos abre un menú para elegir los modelos guardados en
+models/<Problema>/<día>/<score>__<hora>__<modelo> (problema → día → modelo) y probar textos:
 
     uv run python -m src.inference
 
@@ -12,9 +13,9 @@ Cada modelo predice solo su problema; para reconstruir todo hay que elegir uno d
 problema, o la red conjunta, que predice los dos. Los modelos también se
 pueden pasar directamente, salteando el menú de modelos:
 
-    uv run python -m src.inference -m models/CapitalizationProblem/bidirectional_rnn__2026-11-12_19-30__n5000.pkl \\
-                                   -m models/PunctuationProblem/classic_embeddings__2026-11-12_19-30__n5000.joblib
-    uv run python -m src.inference -m models/PunctuationProblem/joint_rnn__2026-11-12_19-30__n5000.pkl -v
+    uv run python -m src.inference -m models/CapitalizationProblem/2026-11-12/0.871__19-30__bidirectional_rnn.pkl \\
+                                   -m models/PunctuationProblem/2026-11-12/0.643__19-30__classic_embeddings.joblib
+    uv run python -m src.inference -m models/PunctuationProblem/2026-11-12/0.702__19-30__joint_rnn.pkl -v
 
 Se usa como máximo un modelo por problema. Si falta el de un problema y el otro es la red
 conjunta, la red conjunta predice los dos.
@@ -74,14 +75,19 @@ Punctuations = list[tuple[int, int]]
 
 
 def model_name(path: Path) -> str:
-    """Nombre del modelo sin la fecha ni el tamaño del dataset de la corrida.
-    Ej: 'standard_rnn__2026-11-12_19-30__n5000.pkl' -> 'standard_rnn'"""
-    return path.stem.split(RUN_SEPARATOR)[0]
+    """Nombre del modelo sin el score ni la hora. Ej: '0.812__19-30__standard_rnn.pkl' -> 'standard_rnn'"""
+    return path.stem.split(RUN_SEPARATOR)[-1]
 
 
 def run_info(path: Path) -> str:
-    """Fecha y tamaño del dataset de la corrida, si el archivo los tiene. Ej: '2026-11-12_19-30 · n5000'"""
-    return " · ".join(path.stem.split(RUN_SEPARATOR)[1:])
+    """Score y hora de la corrida. Ej: 'F1 0.812 · 19-30'"""
+    score, hour, _ = path.stem.split(RUN_SEPARATOR)
+    return f"F1 {score} · {hour}"
+
+
+def problem_of(path: Path) -> str:
+    """El problema es la carpeta de arriba del día: models/<Problema>/<día>/<archivo>"""
+    return path.parent.parent.name
 
 
 @cache
@@ -99,8 +105,8 @@ def _load(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextFeatur
         model.load_state_dict(torch.load(path, weights_only=True, map_location="cpu"))
         return model.eval(), EmbeddingsExtractor
     raise ValueError(
-        f"No reconozco {path}: se espera models/<Problema>/<{'|'.join(NETWORKS)}>.pkl "
-        f"o models/<Problema>/<{'|'.join(CLASSIC_EXTRACTORS)}>.joblib"
+        f"No reconozco {path}: se espera models/<Problema>/<día>/<score>__<hora>__<{'|'.join(NETWORKS)}>.pkl "
+        f"o models/<Problema>/<día>/<score>__<hora>__<{'|'.join(CLASSIC_EXTRACTORS)}>.joblib"
     )
 
 
@@ -108,12 +114,12 @@ class LoadedModel:
     """Un modelo entrenado y el extractor de features con el que se entrenó"""
 
     def __init__(self, path: Path):
-        problem_name, name = path.parent.name, model_name(path)
+        problem_name, name = problem_of(path), model_name(path)
         if problem_name not in PROBLEMS:
-            raise ValueError(f"No reconozco el problema de {path}: se espera models/<{'|'.join(PROBLEMS)}>/...")
+            raise ValueError(f"No reconozco el problema de {path}: se espera models/<{'|'.join(PROBLEMS)}>/<día>/...")
         problem = PROBLEMS[problem_name]
         self.problem_name = problem_name
-        self.name = f"{problem_name}/{path.stem}"
+        self.name = f"{problem_name}/{path.parent.name}/{path.stem}"
         self.is_joint = name == "joint_rnn"
         self.model, extractor_class = _load(path, problem, name)
         self.extractor = _extractor(extractor_class)
@@ -259,34 +265,59 @@ ACTION_TEXT, ACTION_MODELS, ACTION_DETAIL, ACTION_CLEAR, ACTION_EXIT = "text", "
 CLEAR_COMMANDS = {"/limpiar", "/clear"}
 
 
-def available_models(problem_name: str) -> list[Path]:
-    """Modelos guardados por el pipeline para ese problema que este script sabe cargar"""
-    known = set(NETWORKS) | set(CLASSIC_EXTRACTORS)
+def available_days(problem_name: str) -> list[Path]:
+    """Carpetas de día con modelos de ese problema, la más reciente primero"""
     folder = Path(MODELS_DIR) / problem_name
+    return sorted((day for day in folder.glob("*") if available_models(day)), reverse=True)
+
+
+def available_models(day: Path) -> list[Path]:
+    """Modelos de ese día que este script sabe cargar, el de mejor score primero"""
+    known = set(NETWORKS) | set(CLASSIC_EXTRACTORS)
     return sorted(
-        path for path in folder.glob("*")
-        if path.suffix in KIND_LABELS and model_name(path) in known
+        (path for path in day.glob("*")
+         if path.suffix in KIND_LABELS and path.stem.count(RUN_SEPARATOR) == 2 and model_name(path) in known),
+        reverse=True,
     )
 
 
 def _model_choice(path: Path) -> questionary.Choice:
-    """Ej: 'bidirectional_rnn   red' / 'joint_rnn   red · predice las 3 tareas'"""
+    """Ej: 'bidirectional_rnn    F1 0.871 · 19-30   red' / '... red · predice las 3 tareas'"""
     name = model_name(path)
     extra = " · predice las 3 tareas" if name == "joint_rnn" else ""
-    return questionary.Choice(f"{name:<20} {run_info(path):<28} {KIND_LABELS[path.suffix]}{extra}", value=path)
+    return questionary.Choice(f"{name:<20} {run_info(path):<18} {KIND_LABELS[path.suffix]}{extra}", value=path)
+
+
+def _day_choice(day: Path) -> questionary.Choice:
+    """Ej: '2026-11-12   (5 modelos)'"""
+    return questionary.Choice(f"{day.name}   ({len(available_models(day))} modelos)", value=day)
+
+
+def choose_model(problem_name: str, label: str) -> Path | str | None:
+    """Pide día y después modelo de ese día. Devuelve el path, '' si no se elige ninguno
+    y None si se cancela. Desde el menú de modelos se puede volver al de días"""
+    none, back = questionary.Choice("ninguno", value=""), questionary.Choice("← volver", value="back")
+    while True:
+        day = questionary.select(
+            f"Día de {label}:", choices=[_day_choice(day) for day in available_days(problem_name)] + [none]
+        ).ask()
+        if not day:  # None (Ctrl+C) o '' (ninguno)
+            return day
+        path = questionary.select(
+            f"Modelo de {label} ({day.name}):", choices=[_model_choice(p) for p in available_models(day)] + [back]
+        ).ask()
+        if path != "back":
+            return path
 
 
 def choose_models() -> dict[str, Path] | None:
     """Pide un modelo por problema (o ninguno). Devuelve {problema: path}; None si se cancela"""
     chosen = {}
     for problem_name, label in PROBLEM_LABELS.items():
-        choices = [_model_choice(path) for path in available_models(problem_name)]
-        if not choices:
+        if not available_days(problem_name):
             print(f"No hay modelos de {label} en {Path(MODELS_DIR) / problem_name}")
             continue
-        path = questionary.select(
-            f"Modelo de {label}:", choices=choices + [questionary.Choice("ninguno", value="")]
-        ).ask()
+        path = choose_model(problem_name, label)
         if path is None:  # Ctrl+C
             return None
         if path:
@@ -295,12 +326,13 @@ def choose_models() -> dict[str, Path] | None:
 
 
 def paths_by_problem(paths: list[Path]) -> dict[str, Path]:
-    """Ordena los -m por problema (la carpeta del modelo). Falla si hay dos del mismo"""
+    """Ordena los -m por problema (la carpeta arriba del día). Falla si hay dos del mismo"""
     chosen = {}
     for path in paths:
-        if path.parent.name in chosen:
-            raise ValueError(f"Hay dos modelos de {path.parent.name}: {chosen[path.parent.name]} y {path}")
-        chosen[path.parent.name] = path
+        problem_name = problem_of(path)
+        if problem_name in chosen:
+            raise ValueError(f"Hay dos modelos de {problem_name}: {chosen[problem_name]} y {path}")
+        chosen[problem_name] = path
     return chosen
 
 
@@ -372,7 +404,7 @@ def run_menu(selection: ModelSelection, tokenizer: BertTokenizer, verbose: bool)
 def main() -> None:
     parser = ArgumentParser(description="Reconstruye capitalización y puntuación de un texto con modelos entrenados")
     parser.add_argument("-m", "--model", action="append", type=Path,
-                        help="path a un .pkl o .joblib en models/<Problema>/ (uno por problema). "
+                        help="path a un .pkl o .joblib en models/<Problema>/<día>/ (uno por problema). "
                              "Sin -m, se eligen desde un menú")
     parser.add_argument("-v", "--verbose", action="store_true", help="mostrar la clase predicha de cada palabra")
     args = parser.parse_args()

@@ -45,26 +45,37 @@ def build_experiments() -> list[Experiment]:
     ]
 
 
-def _run_suffix(dataset_size: int) -> str:
-    """Sufijo común a todos los archivos de una corrida: fecha de ejecución y tamaño del dataset.
-    Así las corridas no se pisan entre sí. Ej: '__2026-11-12_19-30__n5000'"""
-    date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    return f"{RUN_SEPARATOR}{date}{RUN_SEPARATOR}n{dataset_size}"
+def _run_dir(problem_name: str) -> Path:
+    """Carpeta del día de la corrida: models/<Problema>/<día>. Ej: 'models/PunctuationProblem/2026-11-12'"""
+    model_dir = Path(MODELS_DIR) / problem_name / datetime.now().strftime("%Y-%m-%d")
+    model_dir.mkdir(parents=True, exist_ok=True)
+    return model_dir
 
 
-def _save_experiment(name: str, result: TrainResult, model_dir: Path, problem_name: str, suffix: str) -> None:
+def _file_stem(model_dir: Path, name: str, result: TrainResult, hour: str) -> Path:
+    """<score>__<hora>__<modelo>, con el score como el promedio del F1 macro de sus tareas.
+    Así, ordenados por nombre, los mejores modelos del día quedan al final. No usar
+    with_suffix sobre el resultado: tomaría el punto del score como extensión"""
+    mean_score = sum(result.score.values()) / len(result.score) if result.score else 0.0
+    return model_dir / RUN_SEPARATOR.join((f"{mean_score:.3f}", hour, name))
+
+
+def _with_ext(file_stem: Path, extension: str) -> Path:
+    return file_stem.with_name(file_stem.name + extension)
+
+
+def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_name: str) -> None:
     """Guarda el modelo entrenado y su gráfico. Las redes guardan sus pesos (.pkl) y los
     modelos clásicos el objeto completo (.joblib). El gráfico es la evolución por época si
     entrena por épocas, o la precision/recall por clase sobre test si no (modelos clásicos)"""
-    file_stem = model_dir / f"{name}{suffix}"
     if isinstance(result.model, torch.nn.Module):
-        torch.save(result.model.state_dict(), file_stem.with_suffix(".pkl"))
+        torch.save(result.model.state_dict(), _with_ext(file_stem, ".pkl"))
     elif result.model is not None:
-        joblib.dump(result.model, file_stem.with_suffix(".joblib"), compress=3)
+        joblib.dump(result.model, _with_ext(file_stem, ".joblib"), compress=3)
     if result.history:
-        save_training_plot(result.history, file_stem.with_suffix(".png"), f"{problem_name} · {name} (train)")
+        save_training_plot(result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train)")
     elif result.test_tasks:
-        save_class_metrics_plot(result.per_class, file_stem.with_suffix(".png"), f"{problem_name} · {name} (test)")
+        save_class_metrics_plot(result.per_class, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (test)")
 
 
 def train_models(
@@ -83,16 +94,15 @@ def train_models(
     test_loader = build_loader(test_dataset, shuffle=False)
 
     problem_name = problem.__class__.__name__
-    model_dir = Path(MODELS_DIR) / problem_name
-    model_dir.mkdir(parents=True, exist_ok=True)
-    suffix = _run_suffix(len(development_dataset))
+    model_dir = _run_dir(problem_name)
+    hour = datetime.now().strftime("%H-%M")
     results = {}
     for experiment in experiments:
         logger.info("Entrenando modelo %s", experiment.name)
         result = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
-        _save_experiment(experiment.name, result, model_dir, problem_name, suffix)
+        _save_experiment(experiment.name, result, _file_stem(model_dir, experiment.name, result, hour), problem_name)
         logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(result.score))
         results[experiment.name] = result
 
-    save_confusion_matrices(results, model_dir / f"confusion_matrices{suffix}.png", f"{problem_name} · matrices de confusión (test)")
+    save_confusion_matrices(results, model_dir / f"{hour}{RUN_SEPARATOR}confusion_matrices.png", f"{problem_name} · matrices de confusión (test)")
     return results

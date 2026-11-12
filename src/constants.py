@@ -5,7 +5,8 @@ DATASET_PATH = "datasets/es.txt.gz"
 
 MODELS_DIR = "models"
 
-# Los archivos guardados se llaman <modelo>__<fecha>__n<tamaño del dataset>, ej: standard_rnn__2026-11-12_19-30__n5000.pkl
+# Los modelos se guardan en models/<Problema>/<día>/<score>__<hora>__<modelo>,
+# ej: models/PunctuationProblem/2026-11-12/0.812__19-30__standard_rnn.pkl
 RUN_SEPARATOR = "__"
 
 CAPITALIZATION_DATASET_SIZE=5000

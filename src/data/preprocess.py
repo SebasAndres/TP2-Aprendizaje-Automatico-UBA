@@ -10,13 +10,6 @@ from src.constants import (
 from src.data.punctuation_dataset import PunctuationDataset
 from src.data.capitalization_dataset import CapitalizationDataset
 
-def download_dataset():
-    """
-    Acá se descarga el dataset en DATASET_PATH 
-    """
-
-    return
-
 
 def preprocess_dataset() -> tuple[Dataset, Dataset]:
     """

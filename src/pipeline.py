@@ -1,6 +1,6 @@
 import logging
 
-from src.data import download_dataset, preprocess_dataset, split_dataset_dev_control
+from src.data import preprocess_dataset, split_dataset_dev_control
 from src.training import build_experiments, train_models, save_models
 from src.problem import CapitalizationProblem, PunctuationProblem
 
@@ -15,11 +15,7 @@ if __name__ == '__main__':
     logging.getLogger("src").setLevel(logging.INFO)
 
     try:
-        # Descarga localmente el/los datasets a utilizar
-        logger.info("Inicio del pipeline: descargando datasets")
-        download_dataset()
-
-        logger.info("Cargando combinaciones modelos-featureExtractors")
+        logger.info("Cargando experimentos")
         experiments = build_experiments()
 
         # Genera las instancias de torch.util.data.Dataset en base a el/los
@@ -38,11 +34,9 @@ if __name__ == '__main__':
         ]:
             logger.info("Problema: %s (%d oraciones)", type(problem).__name__, len(dataset))
 
-            # Dividimos datos
             development_set, control_set = split_dataset_dev_control(dataset)
             logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
 
-            # Entrenamos modelos
             models = train_models(development_set, experiments, problem)
             logger.info("Guardando modelos")
             save_models(models)

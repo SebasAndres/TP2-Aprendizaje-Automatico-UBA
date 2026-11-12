@@ -66,36 +66,38 @@ def batch_to_tensors(
     return X, Y, tokens
 
 
-def _predict(
-    model: nn.Module,
-    dataloader: DataLoader,
-    feature_extractor: TextFeatureExtractor,
-    device: torch.device
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Predice la clase más probable de cada token, sin padding.
+def predict(model: nn.Module, X: torch.Tensor) -> torch.Tensor:
+    """Clase más probable de cada token.
 
-    Returns
-    -------
-    - pred, real: np.ndarray
-        Clases predichas y reales a nivel token (n_tokens,)
-    - word_ids: np.ndarray
-        Índice de la palabra de cada token (n_tokens,)
+    X: (n_oraciones, max_tokens, n_features), en el mismo device que el modelo
+    -> (n_oraciones, max_tokens, ...), incluye las posiciones de padding
     """
     model.eval()  # modo evaluación: Dropout apagado, BatchNorm usa sus estadísticas guardadas
-    preds, reals, word_ids = [], [], []
     with torch.no_grad():
-        for batch_X, batch_y in dataloader:
-            batch = batch_to_tensors(batch_X, batch_y, feature_extractor)
-            if batch is None:
-                continue
-            X, Y, tokens = batch
-            pred = model(X.to(device)).argmax(dim=-1).cpu()
-            for i, sentence in enumerate(tokens):
-                n_tokens = len(sentence)
-                preds.append(pred[i, :n_tokens].numpy())
-                reals.append(Y[i, :n_tokens].numpy())
-                word_ids.append(token_word_ids(sentence))
-    return np.concatenate(preds), np.concatenate(reals), concat_word_ids(word_ids)
+        return model(X).argmax(dim=-1)
+
+
+def _evaluate(
+    model: nn.Module,
+    test_loader: DataLoader,
+    feature_extractor: TextFeatureExtractor,
+    problem: Problem,
+    device: torch.device
+) -> dict[str, float]:
+    """Predice sobre test, saca el padding de cada oración y calcula el score del problema"""
+    preds, reals, word_ids = [], [], []
+    for batch_X, batch_y in test_loader:
+        batch = batch_to_tensors(batch_X, batch_y, feature_extractor)
+        if batch is None:
+            continue
+        X, Y, tokens = batch
+        pred = predict(model, X.to(device)).cpu()
+        for i, sentence in enumerate(tokens):
+            n_tokens = len(sentence)
+            preds.append(pred[i, :n_tokens].numpy())
+            reals.append(Y[i, :n_tokens].numpy())
+            word_ids.append(token_word_ids(sentence))
+    return problem.metric.score(np.concatenate(preds), np.concatenate(reals), concat_word_ids(word_ids))
 
 
 def _train_epoch(
@@ -108,7 +110,7 @@ def _train_epoch(
 ) -> float:
     """Hace una pasada completa sobre train y devuelve la loss promedio por batch"""
     # No entrena: solo pone la red en modo entrenamiento (Dropout activo, BatchNorm con
-    # estadísticas del batch). Va en cada época porque _predict la deja en modo eval.
+    # estadísticas del batch). Va en cada época porque predict la deja en modo eval.
 
     model.train()
     total_loss, n_batches = 0.0, 0
@@ -157,8 +159,8 @@ def train_neural_model(
         logger.info("Época %d/%d terminada: loss promedio=%.4f", epoch, N_EPOCHS, avg_loss)
 
     logger.info("Prediciendo y calculando score sobre test")
-    pred, real, word_ids = _predict(model, test_loader, feature_extractor, device)
-    return model.cpu(), problem.metric.score(pred, real, word_ids)
+    score = _evaluate(model, test_loader, feature_extractor, problem, device)
+    return model.cpu(), score
 
 
 def neural_trainer(build_model: ModelFactory) -> Trainer:

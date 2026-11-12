@@ -49,19 +49,27 @@ def build_experiments() -> list[Experiment]:
     ]
 
 
-def _run_dir(problem_name: str) -> Path:
-    """Carpeta del día de la corrida: models/<Problema>/<día>. Ej: 'models/PunctuationProblem/2026-11-12'"""
-    model_dir = Path(MODELS_DIR) / problem_name / datetime.now().strftime("%Y-%m-%d")
+def new_run_dir() -> Path:
+    """Carpeta propia de esta ejecución del pipeline: models/<día>__<hora>.
+    Ej: 'models/2026-11-12__19-30-05'. Adentro, una carpeta por problema"""
+    run_dir = Path(MODELS_DIR) / datetime.now().strftime(f"%Y-%m-%d{RUN_SEPARATOR}%H-%M-%S")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
+def problem_dir(run_dir: Path, problem: Problem) -> Path:
+    """Carpeta del problema dentro de la ejecución. Ej: 'models/2026-11-12__19-30-05/PunctuationProblem'"""
+    model_dir = run_dir / problem.__class__.__name__
     model_dir.mkdir(parents=True, exist_ok=True)
     return model_dir
 
 
-def _file_stem(model_dir: Path, name: str, result: TrainResult, hour: str) -> Path:
-    """<score>__<hora>__<modelo>, con el score como el promedio del F1 macro de sus tareas.
-    Así, ordenados por nombre, los mejores modelos del día quedan al final. No usar
+def _file_stem(model_dir: Path, name: str, result: TrainResult) -> Path:
+    """<score>__<modelo>, con el score como el promedio del F1 macro de sus tareas.
+    Así, ordenados por nombre, los mejores modelos de la ejecución quedan al final. No usar
     with_suffix sobre el resultado: tomaría el punto del score como extensión"""
     mean_score = sum(result.score.values()) / len(result.score) if result.score else 0.0
-    return model_dir / RUN_SEPARATOR.join((f"{mean_score:.3f}", hour, name))
+    return model_dir / RUN_SEPARATOR.join((f"{mean_score:.3f}", name))
 
 
 def _with_ext(file_stem: Path, extension: str) -> Path:
@@ -85,10 +93,11 @@ def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_na
 def train_models(
     development_dataset: Dataset,
     experiments: list[Experiment],
-    problem: Problem
+    problem: Problem,
+    model_dir: Path
 ) -> dict[str, TrainResult]:
     """
-    Acá se entrena y devuelve TODOS los modelos para el dataset dado.
+    Acá se entrena y devuelve TODOS los modelos para el dataset dado, guardándolos en model_dir.
     Inicialmente probamos los mismos modelos para ambos problemas.
     Al final guarda las matrices de confusión sobre test de todos los modelos.
     """
@@ -98,17 +107,15 @@ def train_models(
     test_loader = build_loader(test_dataset, shuffle=False)
 
     problem_name = problem.__class__.__name__
-    model_dir = _run_dir(problem_name)
-    hour = datetime.now().strftime("%H-%M")
     results = {}
     for experiment in experiments:
         logger.info("Entrenando modelo %s", experiment.name)
         result = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
-        _save_experiment(experiment.name, result, _file_stem(model_dir, experiment.name, result, hour), problem_name)
+        _save_experiment(experiment.name, result, _file_stem(model_dir, experiment.name, result), problem_name)
         logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(result.score))
         results[experiment.name] = result
 
-    save_confusion_matrices(results, model_dir / f"{hour}{RUN_SEPARATOR}confusion_matrices.png", f"{problem_name} · matrices de confusión (test)")
+    save_confusion_matrices(results, model_dir / "confusion_matrices.png", f"{problem_name} · matrices de confusión (test)")
     return results
 
 
@@ -116,16 +123,17 @@ def evaluate_on_control(
     control_dataset: Dataset,
     experiment: Experiment,
     result: TrainResult,
-    problem: Problem
+    problem: Problem,
+    model_dir: Path
 ) -> TrainResult:
     """Evalúa sobre control el modelo ya entrenado del experimento. Devuelve un TrainResult
-    cuyas tareas son las de control, y guarda en la carpeta del día su precision/recall por
-    clase y sus matrices de confusión"""
+    cuyas tareas son las de control, y guarda en model_dir su precision/recall por clase y
+    sus matrices de confusión"""
     loader = build_loader(control_dataset, shuffle=False)
     control = TrainResult(result.model, experiment.evaluator(result.model, loader, experiment.feature_extractor, problem))
 
     problem_name = problem.__class__.__name__
-    file_stem = _run_dir(problem_name) / RUN_SEPARATOR.join((datetime.now().strftime("%H-%M"), "control", experiment.name))
+    file_stem = model_dir / RUN_SEPARATOR.join(("control", experiment.name))
     title = f"{problem_name} · {experiment.name} (control)"
     save_class_metrics_plot(control.per_class, _with_ext(file_stem, ".png"), title)
     save_confusion_matrices({experiment.name: control}, _with_ext(file_stem, "_confusion.png"), title)

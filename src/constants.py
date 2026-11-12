@@ -5,8 +5,8 @@ DATASET_PATH = "datasets/es.txt.gz"
 
 MODELS_DIR = "models"
 
-# Los modelos se guardan en models/<Problema>/<día>/<score>__<hora>__<modelo>,
-# ej: models/PunctuationProblem/2026-11-12/0.812__19-30__standard_rnn.pkl
+# Cada ejecución del pipeline guarda sus modelos en models/<día>__<hora>/<Problema>/<score>__<modelo>,
+# ej: models/2026-11-12__19-30-05/PunctuationProblem/0.812__standard_rnn.pkl
 RUN_SEPARATOR = "__"
 
 CAPITALIZATION_DATASET_SIZE=5000

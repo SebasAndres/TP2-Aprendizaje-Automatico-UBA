@@ -3,7 +3,7 @@ from argparse import ArgumentParser, Namespace
 
 from src.constants import CAPITALIZATION_DATASET_SIZE, PUNCTUATION_DATASET_SIZE
 from src.data import preprocess_dataset, split_dataset_dev_control
-from src.training import build_experiments, evaluate_on_control, train_models
+from src.training import build_experiments, evaluate_on_control, new_run_dir, problem_dir, train_models
 from src.training.result import format_score
 from src.problem import CapitalizationProblem, PunctuationProblem
 
@@ -49,6 +49,10 @@ if __name__ == '__main__':
             capitalization_dataset
         ) = preprocess_dataset(args.punctuation_size, args.capitalization_size)
 
+        # Todo lo que guarda esta ejecución va a su propia carpeta: models/<día>__<hora>/
+        run_dir = new_run_dir()
+        logger.info("Guardando modelos en %s", run_dir)
+
         # Para cada problema
         # obs: podría ser paralelo, no creo alcance la RAM
         for dataset, problem in [
@@ -60,7 +64,8 @@ if __name__ == '__main__':
             development_set, control_set = split_dataset_dev_control(dataset)
             logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
 
-            experiment_results = train_models(development_set, experiments, problem)
+            model_dir = problem_dir(run_dir, problem)
+            experiment_results = train_models(development_set, experiments, problem, model_dir)
 
             # Elegimos el modelo ganador
             winning_experiment = max(
@@ -76,7 +81,7 @@ if __name__ == '__main__':
             logger.info("Evaluando %s sobre control", winning_experiment)
             experiment = next(e for e in experiments if e.name == winning_experiment)
             control_result = evaluate_on_control(
-                control_set, experiment, experiment_results[winning_experiment], problem
+                control_set, experiment, experiment_results[winning_experiment], problem, model_dir
             )
             logger.info(
                 "Ganador en control: %s (%s)",

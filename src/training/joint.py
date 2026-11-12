@@ -7,6 +7,7 @@ problema. Después se evalúan solo las cabezas del problema, para compararla co
 """
 from torch.utils.data import DataLoader, Dataset, Subset
 
+from src.data import build_loader
 from src.features import TextFeatureExtractor
 from src.joint_rnn import JointDataset, create_joint_rnn_model
 from src.metrics import JointMetric
@@ -31,12 +32,7 @@ def _same_split(dataset: Dataset, new_root: Dataset) -> Dataset:
 
 def _joint_loader(loader: DataLoader, joint_dataset: Dataset, shuffle: bool) -> DataLoader:
     """Un loader igual a `loader`, con las mismas oraciones, pero con las 3 etiquetas"""
-    return DataLoader(
-        _same_split(loader.dataset, joint_dataset),
-        batch_size=loader.batch_size,
-        shuffle=shuffle,
-        collate_fn=loader.collate_fn
-    )
+    return build_loader(_same_split(loader.dataset, joint_dataset), shuffle)
 
 
 def train_joint_model(

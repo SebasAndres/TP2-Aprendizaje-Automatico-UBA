@@ -6,10 +6,10 @@ from pathlib import Path
 
 import joblib
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader
 
-from src.constants import BATCH_SIZE, MODELS_DIR, RANDOM_SEED, RUN_SEPARATOR, TEST_RATIO
-from src.data import collate_batch
+from src.constants import MODELS_DIR, RUN_SEPARATOR
+from src.data import build_loader, split_train_test
 from src.features import (
     AverageEmbeddingsExtractor,
     ClassicFeatureExtractor,
@@ -45,15 +45,6 @@ def build_experiments() -> list[Experiment]:
     ]
 
 
-def _build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
-    return DataLoader(
-        dataset=dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=shuffle,
-        num_workers=0,
-        collate_fn=collate_batch
-    )
-
 def _run_suffix(dataset_size: int) -> str:
     """Sufijo común a todos los archivos de una corrida: fecha de ejecución y tamaño del dataset.
     Así las corridas no se pisan entre sí. Ej: '__2026-11-12_19-30__n5000'"""
@@ -86,14 +77,10 @@ def train_models(
     Inicialmente probamos los mismos modelos para ambos problemas.
     Al final guarda las matrices de confusión sobre test de todos los modelos.
     """
-    train_dataset, test_dataset = random_split(
-        development_dataset,
-        [1-TEST_RATIO, TEST_RATIO],
-        generator=torch.Generator().manual_seed(RANDOM_SEED)
-    )
+    train_dataset, test_dataset = split_train_test(development_dataset)
     logger.info("Split: train=%d, test=%d", len(train_dataset), len(test_dataset))
-    train_loader = _build_loader(train_dataset, shuffle=True)
-    test_loader = _build_loader(test_dataset, shuffle=False)
+    train_loader = build_loader(train_dataset, shuffle=True)
+    test_loader = build_loader(test_dataset, shuffle=False)
 
     problem_name = problem.__class__.__name__
     model_dir = Path(MODELS_DIR) / problem_name

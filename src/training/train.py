@@ -1,13 +1,14 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import joblib
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from src.constants import BATCH_SIZE, MODELS_DIR, RANDOM_SEED, TEST_RATIO
+from src.constants import BATCH_SIZE, MODELS_DIR, RANDOM_SEED, RUN_SEPARATOR, TEST_RATIO
 from src.data import collate_batch
 from src.features import (
     AverageEmbeddingsExtractor,
@@ -53,18 +54,26 @@ def _build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
         collate_fn=collate_batch
     )
 
-def _save_experiment(name: str, result: TrainResult, model_dir: Path, problem_name: str) -> None:
+def _run_suffix(dataset_size: int) -> str:
+    """Sufijo común a todos los archivos de una corrida: fecha de ejecución y tamaño del dataset.
+    Así las corridas no se pisan entre sí. Ej: '__2026-11-12_19-30__n5000'"""
+    date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    return f"{RUN_SEPARATOR}{date}{RUN_SEPARATOR}n{dataset_size}"
+
+
+def _save_experiment(name: str, result: TrainResult, model_dir: Path, problem_name: str, suffix: str) -> None:
     """Guarda el modelo entrenado y su gráfico. Las redes guardan sus pesos (.pkl) y los
     modelos clásicos el objeto completo (.joblib). El gráfico es la evolución por época si
     entrena por épocas, o la precision/recall por clase sobre test si no (modelos clásicos)"""
+    file_stem = model_dir / f"{name}{suffix}"
     if isinstance(result.model, torch.nn.Module):
-        torch.save(result.model.state_dict(), model_dir / f"{name}.pkl")
+        torch.save(result.model.state_dict(), file_stem.with_suffix(".pkl"))
     elif result.model is not None:
-        joblib.dump(result.model, model_dir / f"{name}.joblib", compress=3)
+        joblib.dump(result.model, file_stem.with_suffix(".joblib"), compress=3)
     if result.history:
-        save_training_plot(result.history, model_dir / f"{name}.png", f"{problem_name} · {name} (train)")
+        save_training_plot(result.history, file_stem.with_suffix(".png"), f"{problem_name} · {name} (train)")
     elif result.test_tasks:
-        save_class_metrics_plot(result.per_class, model_dir / f"{name}.png", f"{problem_name} · {name} (test)")
+        save_class_metrics_plot(result.per_class, file_stem.with_suffix(".png"), f"{problem_name} · {name} (test)")
 
 
 def train_models(
@@ -89,13 +98,14 @@ def train_models(
     problem_name = problem.__class__.__name__
     model_dir = Path(MODELS_DIR) / problem_name
     model_dir.mkdir(parents=True, exist_ok=True)
+    suffix = _run_suffix(len(development_dataset))
     results = {}
     for experiment in experiments:
         logger.info("Entrenando modelo %s", experiment.name)
         result = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
-        _save_experiment(experiment.name, result, model_dir, problem_name)
+        _save_experiment(experiment.name, result, model_dir, problem_name, suffix)
         logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(result.score))
         results[experiment.name] = result
 
-    save_confusion_matrices(results, model_dir / "confusion_matrices.png", f"{problem_name} · matrices de confusión (test)")
+    save_confusion_matrices(results, model_dir / f"confusion_matrices{suffix}.png", f"{problem_name} · matrices de confusión (test)")
     return results

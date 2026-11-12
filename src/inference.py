@@ -12,9 +12,9 @@ Cada modelo predice solo su problema; para reconstruir todo hay que elegir uno d
 problema, o la red conjunta, que predice los dos. Los modelos también se
 pueden pasar directamente, salteando el menú de modelos:
 
-    uv run python -m src.inference -m models/CapitalizationProblem/bidirectional_rnn.pkl \\
-                                   -m models/PunctuationProblem/classic_embeddings.joblib
-    uv run python -m src.inference -m models/PunctuationProblem/joint_rnn.pkl -v
+    uv run python -m src.inference -m models/CapitalizationProblem/bidirectional_rnn__2026-11-12_19-30__n5000.pkl \\
+                                   -m models/PunctuationProblem/classic_embeddings__2026-11-12_19-30__n5000.joblib
+    uv run python -m src.inference -m models/PunctuationProblem/joint_rnn__2026-11-12_19-30__n5000.pkl -v
 
 Se usa como máximo un modelo por problema. Si falta el de un problema y el otro es la red
 conjunta, la red conjunta predice los dos.
@@ -34,7 +34,7 @@ import transformers
 from torch import nn
 from transformers import BertTokenizer
 
-from src.constants import EMBEDDINGS_MODEL, MODELS_DIR
+from src.constants import EMBEDDINGS_MODEL, MODELS_DIR, RUN_SEPARATOR
 from src.data import strip_punctuation
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 from src.features import (
@@ -70,6 +70,17 @@ Punctuations = list[tuple[int, int]]
 """(puntuación inicial, puntuación final) de cada palabra: índices de INITIAL_LABELS y FINAL_LABELS"""
 
 
+def model_name(path: Path) -> str:
+    """Nombre del modelo sin la fecha ni el tamaño del dataset de la corrida.
+    Ej: 'standard_rnn__2026-11-12_19-30__n5000.pkl' -> 'standard_rnn'"""
+    return path.stem.split(RUN_SEPARATOR)[0]
+
+
+def run_info(path: Path) -> str:
+    """Fecha y tamaño del dataset de la corrida, si el archivo los tiene. Ej: '2026-11-12_19-30 · n5000'"""
+    return " · ".join(path.stem.split(RUN_SEPARATOR)[1:])
+
+
 @cache
 def _extractor(extractor_class: type[TextFeatureExtractor]) -> TextFeatureExtractor:
     """Una sola instancia por tipo de extractor: los de embeddings cargan BERT"""
@@ -94,12 +105,12 @@ class LoadedModel:
     """Un modelo entrenado y el extractor de features con el que se entrenó"""
 
     def __init__(self, path: Path):
-        problem_name, name = path.parent.name, path.stem
+        problem_name, name = path.parent.name, model_name(path)
         if problem_name not in PROBLEMS:
             raise ValueError(f"No reconozco el problema de {path}: se espera models/<{'|'.join(PROBLEMS)}>/...")
         problem = PROBLEMS[problem_name]
         self.problem_name = problem_name
-        self.name = f"{problem_name}/{name}"
+        self.name = f"{problem_name}/{path.stem}"
         self.is_joint = name == "joint_rnn"
         self.model, extractor_class = _load(path, problem, name)
         self.extractor = _extractor(extractor_class)
@@ -245,14 +256,15 @@ def available_models(problem_name: str) -> list[Path]:
     folder = Path(MODELS_DIR) / problem_name
     return sorted(
         path for path in folder.glob("*")
-        if path.suffix in KIND_LABELS and path.stem in known
+        if path.suffix in KIND_LABELS and model_name(path) in known
     )
 
 
 def _model_choice(path: Path) -> questionary.Choice:
     """Ej: 'bidirectional_rnn   red' / 'joint_rnn   red · predice las 3 tareas'"""
-    extra = " · predice las 3 tareas" if path.stem == "joint_rnn" else ""
-    return questionary.Choice(f"{path.stem:<20} {KIND_LABELS[path.suffix]}{extra}", value=path)
+    name = model_name(path)
+    extra = " · predice las 3 tareas" if name == "joint_rnn" else ""
+    return questionary.Choice(f"{name:<20} {run_info(path):<28} {KIND_LABELS[path.suffix]}{extra}", value=path)
 
 
 def choose_models() -> dict[str, Path] | None:

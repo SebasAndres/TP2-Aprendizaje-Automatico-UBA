@@ -18,7 +18,7 @@ from src.features import (
 )
 from src.problem import Problem
 from src.training.classic import evaluate_classic_model, train_classic_model
-from src.training.joint import evaluate_joint_model, train_joint_model
+from src.training.joint import evaluate_joint_model, joint_trainer
 from src.training.neural import Evaluator, evaluate_problem_network, neural_trainer
 from src.training.plots import save_class_metrics_plot, save_confusion_matrices, save_training_plot
 from src.training.result import TrainResult, format_score
@@ -45,7 +45,10 @@ def build_experiments() -> list[Experiment]:
                    evaluate_problem_network, embeddings),
         Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()),
                    evaluate_problem_network, embeddings),
-        Experiment("joint_rnn", train_joint_model, evaluate_joint_model, embeddings),
+        Experiment("joint_rnn", joint_trainer(bidirectional=False), evaluate_joint_model, embeddings),
+        Experiment("bidirectional_joint_rnn", joint_trainer(bidirectional=True), evaluate_joint_model, embeddings),
+        Experiment("joint_lstm", joint_trainer(bidirectional=False, lstm=True), evaluate_joint_model, embeddings),
+        Experiment("bidirectional_joint_lstm", joint_trainer(bidirectional=True, lstm=True), evaluate_joint_model, embeddings),
     ]
 
 

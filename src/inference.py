@@ -45,7 +45,7 @@ from src.features import (
     EmbeddingsExtractor,
     TextFeatureExtractor,
 )
-from src.joint_rnn import create_joint_rnn_model
+from src.joint_rnn import create_joint_lstm_model, create_joint_rnn_model
 from src.metrics.base import class_name
 from src.problem import CapitalizationProblem, Problem, PunctuationProblem
 from src.training.neural import predict
@@ -61,7 +61,12 @@ NETWORKS: dict[str, Callable[[Problem], nn.Module]] = {
     "standard_rnn": lambda problem: problem.standard_rnn_model(),
     "bidirectional_rnn": lambda problem: problem.bidirectional_rnn_model(),
     "joint_rnn": lambda _: create_joint_rnn_model(),
+    "bidirectional_joint_rnn": lambda _: create_joint_rnn_model(bidirectional=True),
+    "joint_lstm": lambda _: create_joint_lstm_model(),
+    "bidirectional_joint_lstm": lambda _: create_joint_lstm_model(bidirectional=True),
 }
+# Redes que predicen las 3 tareas a la vez
+JOINT_NETWORKS = {"joint_rnn", "bidirectional_joint_rnn", "joint_lstm", "bidirectional_joint_lstm"}
 CLASSIC_EXTRACTORS: dict[str, type[TextFeatureExtractor]] = {
     "classic_features": ClassicFeatureExtractor,
     "classic_embeddings": AverageEmbeddingsExtractor,
@@ -125,7 +130,7 @@ class LoadedModel:
         problem = PROBLEMS[problem_name]
         self.problem_name = problem_name
         self.name = f"{run_of(path.parent)}/{problem_name}/{path.stem}"
-        self.is_joint = name == "joint_rnn"
+        self.is_joint = name in JOINT_NETWORKS
         self.model, extractor_class = _load(path, problem, name)
         self.extractor = _extractor(extractor_class)
 
@@ -290,8 +295,8 @@ def available_models(folder: Path) -> list[Path]:
 def _model_choice(path: Path) -> questionary.Choice:
     """Ej: 'bidirectional_rnn    F1 0.871   red' / '... red · predice las 3 tareas'"""
     name = model_name(path)
-    extra = " · predice las 3 tareas" if name == "joint_rnn" else ""
-    return questionary.Choice(f"{name:<20} {run_info(path):<10} {KIND_LABELS[path.suffix]}{extra}", value=path)
+    extra = " · predice las 3 tareas" if name in JOINT_NETWORKS else ""
+    return questionary.Choice(f"{name:<24} {run_info(path):<10} {KIND_LABELS[path.suffix]}{extra}", value=path)
 
 
 def _run_choice(folder: Path) -> questionary.Choice:

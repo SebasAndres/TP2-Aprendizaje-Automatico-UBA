@@ -1,4 +1,5 @@
-"""Experimento `joint_rnn`: una RNN que aprende capitalización y puntuación a la vez.
+"""Experimentos conjuntos (`joint_rnn`, `bidirectional_joint_rnn`, `joint_lstm`,
+`bidirectional_joint_lstm`): una red recurrente que aprende capitalización y puntuación a la vez.
 
 Las demás redes se entrenan solo con las etiquetas del problema. Esta necesita las 3
 etiquetas de cada token, así que se arma un `JointDataset` con las mismas oraciones y se le
@@ -10,11 +11,11 @@ from torch.utils.data import DataLoader, Dataset, Subset
 
 from src.data import build_loader
 from src.features import TextFeatureExtractor
-from src.joint_rnn import JointDataset, create_joint_rnn_model
+from src.joint_rnn import JointDataset, create_joint_model
 from src.metrics import JointMetric
 from src.metrics.base import WordLevelTask
 from src.problem import Problem
-from src.training.neural import evaluate_neural_model, train_neural_model
+from src.training.neural import Trainer, evaluate_neural_model, train_neural_model
 from src.training.result import TrainResult
 
 
@@ -38,27 +39,40 @@ def _joint_loader(loader: DataLoader, joint_dataset: Dataset, shuffle: bool) -> 
 
 
 def _joint_dataset(loader: DataLoader) -> Dataset:
-    """Las mismas oraciones del dataset original de `loader`, en el mismo orden, con las 3 etiquetas"""
-    root = _root_dataset(loader.dataset)
-    return JointDataset(root.path, len(root))
+    """Las mismas instancias del dataset original de `loader`, en el mismo orden, con las 3 etiquetas"""
+    return JointDataset(_root_dataset(loader.dataset).samples)
 
 
 def train_joint_model(
     train_loader: DataLoader,
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
-    problem: Problem
+    problem: Problem,
+    bidirectional: bool = False,
+    lstm: bool = False
 ) -> TrainResult:
-    """Entrena JointRNN con las 3 tareas y la evalúa solo en las tareas del problema"""
+    """Entrena la red conjunta (RNN o LSTM) con las 3 tareas y la evalúa solo en las tareas del problema"""
     joint_dataset = _joint_dataset(train_loader)
     result = train_neural_model(
         _joint_loader(train_loader, joint_dataset, shuffle=True),
         _joint_loader(test_loader, joint_dataset, shuffle=False),
         feature_extractor,
         JointMetric(),
-        create_joint_rnn_model()
+        create_joint_model(bidirectional, lstm)
     )
     return result.only_tasks(problem.metric.tasks)
+
+
+def joint_trainer(bidirectional: bool, lstm: bool = False) -> Trainer:
+    """`train_joint_model` con la firma de `Experiment.trainer`, fijando la dirección y el tipo de celda"""
+    def trainer(
+        train_loader: DataLoader,
+        test_loader: DataLoader,
+        feature_extractor: TextFeatureExtractor,
+        problem: Problem
+    ) -> TrainResult:
+        return train_joint_model(train_loader, test_loader, feature_extractor, problem, bidirectional, lstm)
+    return trainer
 
 
 def evaluate_joint_model(

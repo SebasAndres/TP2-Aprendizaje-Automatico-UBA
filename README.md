@@ -22,7 +22,8 @@ compartiendo los pesos entre las tres tareas. Está fuera del pipeline para disc
 compartir pesos. Usa los mismos splits, semilla e hiperparámetros que la RNN estándar de capitalización.
 
 ~~~bash
-uv run python -m src.joint_rnn --sentences 30000                  # RNN estándar, ~1 min en CPU
-uv run python -m src.joint_rnn --sentences 30000 --bidirectional  # RNN bidireccional, ~1 min en CPU
-uv run python -m src.joint_rnn                                    # dataset completo
+uv run python -m src.joint_rnn --size 10000                  # RNN estándar, hasta 10000 instancias por fuente
+uv run python -m src.joint_rnn --size 10000 --bidirectional  # RNN bidireccional
+uv run python -m src.joint_rnn                               # todas las instancias de cada fuente
+uv run python -m src.joint_rnn --bidirectional --lstm        # LSTM bidireccional en lugar de RNN simple
 ~~~

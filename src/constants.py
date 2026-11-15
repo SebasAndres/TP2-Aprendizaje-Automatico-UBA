@@ -1,7 +1,16 @@
 
 EMBEDDINGS_MODEL = 'bert-base-multilingual-cased'
 
-DATASET_PATH = "datasets/es.txt.gz"
+# Fuentes de texto: nombre -> ruta. Cada una tiene su lector en src/data/preprocess.py
+DATASET_SOURCES = {
+    "es": "datasets/es.txt.gz",
+    "rioplatense": "datasets/dataset_rioplatense_completo.txt",
+    "ted": "datasets/data_30TEDS.txt",
+    "mrbeast": "datasets/mrbeastBaseDatosNoCarpeta",
+    "peliculas": "datasets/peliculasArgentinas",
+    "simuladores": "datasets/losSimuladores",
+    "okupas": "datasets/okupas",
+}
 
 MODELS_DIR = "models"
 
@@ -9,8 +18,19 @@ MODELS_DIR = "models"
 # ej: models/2026-11-12__19-30-05/PunctuationProblem/0.812__standard_rnn.pkl
 RUN_SEPARATOR = "__"
 
-CAPITALIZATION_DATASET_SIZE=5000
-PUNCTUATION_DATASET_SIZE=5000
+# Máximo de instancias que aporta CADA fuente, así la más grande (es.txt.gz) no tapa al resto
+CAPITALIZATION_DATASET_SIZE=1000
+PUNCTUATION_DATASET_SIZE=1000
+
+# Peso de cada clase en la CrossEntropy de las redes: (N / (K · n_clase)) ** CLASS_WEIGHT_POWER.
+# 1 = cada clase pesa lo mismo, 0.5 = raíz (punto medio), 0 = sin pesos. Ver src/training/weights.py
+CLASS_WEIGHT_POWER = 0.5
+
+# Las instancias son ventanas de palabras sin solapamiento, con un largo sorteado entre
+# WINDOW_MIN_SIZE y WINDOW_MAX_SIZE según WINDOW_DISTRIBUTION ("uniform" o "normal")
+WINDOW_MIN_SIZE = 5
+WINDOW_MAX_SIZE = 60
+WINDOW_DISTRIBUTION = "uniform"
 
 BATCH_SIZE = 200
 

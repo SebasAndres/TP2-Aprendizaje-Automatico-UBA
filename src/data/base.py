@@ -1,4 +1,3 @@
-import gzip
 from abc import abstractmethod
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -30,15 +29,11 @@ def collate_batch(
 
 class TextDataset(Dataset):
 
-    def __init__(
-        self, 
-        path: str,
-        size: int
-    ):
-        self.path = path
-        with gzip.open(self.path, mode="rt", encoding="utf-8") as f:
-            self.data = f.read().splitlines()[:size]
-        self.len = len(self.data)
+    def __init__(self, samples: list[list[str]]):
+        """samples: cada instancia es una lista de palabras con su puntuación y capitalización
+        originales (ver src/data/samples.py)"""
+        self.samples = samples
+        self.len = len(self.samples)
         self.tokenizer = BertTokenizer.from_pretrained(EMBEDDINGS_MODEL)
 
     @abstractmethod
@@ -57,7 +52,7 @@ class TextDataset(Dataset):
         return self.len
 
     def __getitem__(self, idx: int):
-        words = self.data[idx].split()
+        words = self.samples[idx]
         word_tokens = self._tokenize_words(words)
         tokens = [token for tokens in word_tokens for token in tokens]
         y = self._expected_output(words, word_tokens)

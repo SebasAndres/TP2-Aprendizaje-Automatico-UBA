@@ -3,6 +3,8 @@ from src.data.capitalization_dataset import CapitalizationDataset, word_capitali
 from src.data.punctuation_dataset import PunctuationDataset, word_punctuation
 from src.data.preprocess import (
     build_loader,
+    load_documents,
+    load_samples,
     preprocess_dataset,
     split_dataset_dev_control,
     split_train_test,
@@ -19,6 +21,8 @@ __all__ = [
     "PunctuationDataset",
     "word_punctuation",
     "build_loader",
+    "load_documents",
+    "load_samples",
     "preprocess_dataset",
     "split_dataset_dev_control",
     "split_train_test",

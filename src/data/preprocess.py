@@ -1,10 +1,13 @@
+import logging
+from collections.abc import Callable
 from pathlib import Path
+
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 
 from src.constants import (
     BATCH_SIZE,
-    DATASET_PATH,
+    DATASET_SOURCES,
     CONTROL_RATIO,
     RANDOM_SEED,
     CAPITALIZATION_DATASET_SIZE,
@@ -14,30 +17,72 @@ from src.constants import (
 from src.data.base import collate_batch
 from src.data.punctuation_dataset import PunctuationDataset
 from src.data.capitalization_dataset import CapitalizationDataset
+from src.data.samples import Sample, WindowSpec, build_samples
+from src.data.sources import Document, read_line_sentences, read_srt, read_subtitles, read_ted
+
+logger = logging.getLogger(__name__)
+
+# Lector de cada fuente de DATASET_SOURCES
+READERS: dict[str, Callable[[str], list[Document]]] = {
+    "es": read_line_sentences,
+    "rioplatense": read_line_sentences,
+    "ted": read_ted,
+    "mrbeast": read_subtitles,
+    "peliculas": read_srt,
+    "simuladores": read_srt,
+    "okupas": read_srt,
+}
+
+
+def load_documents() -> dict[str, list[Document]]:
+    """Lee cada fuente de DATASET_SOURCES con su lector. Una fuente que no está en disco se
+    saltea con un warning; si no hay ninguna, falla"""
+    documents = {}
+    for name, path in DATASET_SOURCES.items():
+        if not Path(path).exists():
+            logger.warning("Fuente %s: no existe %s, se saltea", name, path)
+            continue
+        documents[name] = READERS[name](path)
+    if not documents:
+        raise FileNotFoundError(f"No se encontró ninguna fuente de {list(DATASET_SOURCES.values())}")
+    return documents
+
+
+def load_samples(
+    documents: dict[str, list[Document]],
+    size: int | None,
+    window: WindowSpec | None = WindowSpec(),
+) -> list[Sample]:
+    """Corta cada fuente en instancias (ventanas o oraciones) y toma las primeras `size` de
+    cada una (todas si es None), así ninguna fuente tapa al resto"""
+    samples = []
+    for name, source_documents in documents.items():
+        source_samples = build_samples(source_documents, window)[:size]
+        logger.info("Fuente %s: %d instancias", name, len(source_samples))
+        samples.extend(source_samples)
+    return samples
 
 
 def preprocess_dataset(
     punctuation_size: int = PUNCTUATION_DATASET_SIZE,
-    capitalization_size: int = CAPITALIZATION_DATASET_SIZE
+    capitalization_size: int = CAPITALIZATION_DATASET_SIZE,
+    window: WindowSpec | None = WindowSpec(),
 ) -> tuple[Dataset, Dataset]:
     """
-    A partir de los datasets locales crea las instancias del punctuation dataset y 
-    capitalization dataset, con la cantidad de oraciones pedida para cada uno.
+    A partir de las fuentes locales crea las instancias del punctuation dataset y
+    capitalization dataset. Cada fuente aporta como mucho `*_size` instancias, cortadas
+    en ventanas según `window` (o una oración por instancia si window es None).
 
     Returns
     ------
     - punctuation_dataset: PunctuationDataset
-        El dataset completo para el problema de puntuación 
+        El dataset completo para el problema de puntuación
     - capitalization_datset: CapitalizationDataset
-        El dataset completo para el problema de capitalización 
+        El dataset completo para el problema de capitalización
     """
-
-    dataset_file = Path(DATASET_PATH)
-    if not dataset_file.is_file():
-        raise FileNotFoundError(f"No existe el dataset en {DATASET_PATH}")
-
-    punctuation_dataset = PunctuationDataset(DATASET_PATH, punctuation_size)
-    capitalization_dataset = CapitalizationDataset(DATASET_PATH, capitalization_size)
+    documents = load_documents()
+    punctuation_dataset = PunctuationDataset(load_samples(documents, punctuation_size, window))
+    capitalization_dataset = CapitalizationDataset(load_samples(documents, capitalization_size, window))
 
     return punctuation_dataset, capitalization_dataset
 

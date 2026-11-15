@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from src.metrics.base import Metric, WordLevelTask, multitask_cross_entropy
+from src.metrics.base import ClassWeights, Metric, WordLevelTask, multitask_cross_entropy
 from src.metrics.capitalization import CapitalizationMetric
 from src.metrics.punctuation import PunctuationMetric
 
@@ -21,7 +21,9 @@ class JointMetric(Metric):
             **self.punctuation.word_level(pred[:, 1:], real[:, 1:], word_ids),
         }
 
-    def loss(self, logits: torch.Tensor, real: torch.Tensor) -> torch.Tensor:
+    def loss(
+        self, logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None
+    ) -> torch.Tensor:
         """Suma de la CrossEntropy de cada tarea, ignorando el padding.
         logits: (batch, n_tokens, 3 tareas, n_clases), real: (batch, n_tokens, 3 tareas)"""
-        return multitask_cross_entropy(logits, real)
+        return multitask_cross_entropy(logits, real, class_weights)

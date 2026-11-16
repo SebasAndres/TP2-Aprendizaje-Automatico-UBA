@@ -18,5 +18,5 @@ class PunctuationProblem(Problem):
     def standard_rnn_model(self) -> Any:
         return create_standard_rnn_model()
 
-    def bidirectional_rnn_model(self) -> Any:
-        return create_bidirectional_rnn_model()
+    def bidirectional_rnn_model(self, dropout: float = 0.0) -> Any:
+        return create_bidirectional_rnn_model(dropout)

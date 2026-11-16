@@ -39,6 +39,10 @@ logger = logging.getLogger(__name__)
 
 N_EPOCHS = 5
 LEARNING_RATE = 1e-3
+# Regularización L2 desacoplada (AdamW): en cada paso achica los pesos w <- w - lr * WEIGHT_DECAY * w,
+# aparte del paso de Adam. Con Adam(weight_decay=...) el término L2 pasaría por la escala
+# adaptativa y los pesos con gradientes grandes casi no se regularizarían
+WEIGHT_DECAY = 1e-2
 # Norma máxima del gradiente en cada paso (None = sin recortar). En una RNN, backpropagation
 # through time multiplica muchas veces por W_h y el gradiente puede explotar en secuencias
 # largas; recortarlo evita que un solo batch desarme los pesos
@@ -258,7 +262,7 @@ def train_neural_model(
     n_epochs = n_epochs or N_EPOCHS
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     logger.info(
         "Entrenando %s en %s (%d parámetros)", type(model).__name__, device, sum(p.numel() for p in model.parameters())
     )

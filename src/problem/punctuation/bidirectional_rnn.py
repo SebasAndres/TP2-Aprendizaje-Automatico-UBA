@@ -23,6 +23,9 @@ class PunctuationBidirectionalRNN(nn.Module):
         Dimensión del embedding de cada token (768 para BERT multilingüe).
     hidden_dim : int, default=HIDDEN_DIM
         Dimensión del estado oculto de cada dirección.
+    dropout : float, default=0.0
+        Probabilidad de apagar cada valor de ``[h→_t ; h←_t]`` antes de las cabezas,
+        solo durante el entrenamiento (regularización). Con 0 no se apaga nada.
 
     Attributes
     ----------
@@ -44,10 +47,14 @@ class PunctuationBidirectionalRNN(nn.Module):
         self,
         input_dim: int = EMBEDDING_DIM,
         hidden_dim: int = HIDDEN_DIM,
+        dropout: float = 0.0,
     ):
         super().__init__()
         # 1. Activamos la lectura en ambas direcciones
         self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True, bidirectional=True)
+        # El dropout= de nn.RNN solo actúa entre capas apiladas: con una sola capa no haría
+        # nada, así que va como capa aparte sobre la salida de la RNN
+        self.dropout = nn.Dropout(dropout)
 
         # 2. Multiplicamos la entrada por 2 para las dos cabezas de salida
         self.out_ini = nn.Linear(hidden_dim * 2, 2)
@@ -74,6 +81,7 @@ class PunctuationBidirectionalRNN(nn.Module):
         packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
         h, _ = self.rnn(packed)
         h, _ = pad_packed_sequence(h, batch_first=True, total_length=x.size(1))
+        h = self.dropout(h)  # en model.eval() no apaga nada
 
         logits_ini = self.out_ini(h)
         logits_fin = self.out_fin(h)
@@ -85,11 +93,16 @@ class PunctuationBidirectionalRNN(nn.Module):
         return torch.stack([logits_ini_padded, logits_fin], dim=2)
 
 
-def create_bidirectional_rnn_model() -> PunctuationBidirectionalRNN:
+def create_bidirectional_rnn_model(dropout: float = 0.0) -> PunctuationBidirectionalRNN:
     """Crea la RNN bidireccional de puntuación, sin entrenar.
 
     Fija la semilla antes de construirla para que todas las corridas arranquen
     con los mismos pesos.
+
+    Parameters
+    ----------
+    dropout : float, default=0.0
+        Probabilidad de dropout sobre la salida de la RNN (0 = sin dropout).
 
     Returns
     -------
@@ -97,4 +110,4 @@ def create_bidirectional_rnn_model() -> PunctuationBidirectionalRNN:
         Red con las dimensiones por defecto de ``src.constants``.
     """
     torch.manual_seed(RANDOM_SEED)
-    return PunctuationBidirectionalRNN()
+    return PunctuationBidirectionalRNN(dropout=dropout)

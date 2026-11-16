@@ -18,5 +18,5 @@ class Problem(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def bidirectional_rnn_model(self) -> Any:
+    def bidirectional_rnn_model(self, dropout: float = 0.0) -> Any:
         raise NotImplementedError

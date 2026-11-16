@@ -13,7 +13,7 @@ from src.constants import (
 )
 from src.data import preprocess_dataset, split_dataset_dev_control
 from src.data.samples import add_window_args, window_from_args
-from src.training import build_experiments, evaluate_on_control, create_run_directory, problem_dir, train_models
+from src.training import Experiment, build_experiments, evaluate_on_control, create_run_directory, problem_dir, train_models
 from src.training import neural
 from src.training.report import experiment_report, save_report
 from src.training.result import format_score
@@ -37,8 +37,21 @@ def parse_args() -> Namespace:
                         help=f"instancias de cada fuente para capitalización (default: {CAPITALIZATION_DATASET_SIZE})")
     parser.add_argument("--punctuation-size", type=int, default=PUNCTUATION_DATASET_SIZE,
                         help=f"instancias de cada fuente para puntuación (default: {PUNCTUATION_DATASET_SIZE})")
+    parser.add_argument("--experiments", type=lambda s: s.split(","), default=None,
+                        help="experimentos a entrenar, separados por coma, ej: joint_lstm,bidirectional_rnn (default: todos)")
     add_window_args(parser)
     return parser.parse_args()
+
+
+def select_experiments(experiments: list[Experiment], names: list[str] | None) -> list[Experiment]:
+    """Los experimentos pedidos, en el orden de build_experiments (todos si names es None)"""
+    if names is None:
+        return experiments
+    unknown = set(names) - {experiment.name for experiment in experiments}
+    if unknown:
+        available = [experiment.name for experiment in experiments]
+        raise ValueError(f"Experimentos desconocidos: {sorted(unknown)}. Disponibles: {available}")
+    return [experiment for experiment in experiments if experiment.name in names]
 
 
 def run_config(args: Namespace) -> dict[str, Any]:
@@ -47,6 +60,7 @@ def run_config(args: Namespace) -> dict[str, Any]:
     return {
         "capitalization_size": args.capitalization_size,
         "punctuation_size": args.punctuation_size,
+        "experiments": args.experiments,  # None = todos
         "window": asdict(window) if window else None,  # None = una oración por instancia
         "n_epochs": neural.N_EPOCHS,
         "learning_rate": neural.LEARNING_RATE,
@@ -68,7 +82,7 @@ if __name__ == '__main__':
     logging.getLogger("src").setLevel(logging.INFO)
 
     logger.info("Cargando experimentos")
-    experiments = build_experiments()
+    experiments = select_experiments(build_experiments(), args.experiments)
 
     # Genera las instancias de torch.util.data.Dataset en base a el/los
     # datasets descargados en local

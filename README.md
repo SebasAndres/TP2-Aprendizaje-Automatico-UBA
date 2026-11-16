@@ -10,6 +10,13 @@ Para ejecutar el entrenamiento se usa
 uv run python -m src.pipeline
 ~~~
 
+Para iterar rápido con pocos datos y solo algunos experimentos (los nombres de `build_experiments`
+en `src/training/train.py`):
+~~~bash
+uv run python -m src.pipeline --experiments standard_rnn,joint_lstm \
+    --capitalization-size 300 --punctuation-size 300
+~~~
+
 Para probar RT los modelos se usa
 ~~~bash
 uv run python -m src.inference

@@ -47,12 +47,13 @@ from src.features import (
     EmbeddingsExtractor,
     TextFeatureExtractor,
 )
-from src.joint_networks import (
+from src.problem.joint import (
+    create_joint_lstm_model,
+    create_joint_rnn_model,
     create_conv_bilstm_model,
     create_projected_bigru_model,
     create_residual_stacked_bilstm_model,
 )
-from src.joint_rnn import create_joint_lstm_model, create_joint_rnn_model
 from src.metrics.base import class_name
 from src.problem import CapitalizationProblem, Problem, PunctuationProblem
 from src.training.neural import predict

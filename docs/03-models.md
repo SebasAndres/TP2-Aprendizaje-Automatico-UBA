@@ -84,10 +84,10 @@ con $C_k$ las clases de la tarea (4, 2 o 4).
 | `joint_residual_stacked_bilstm` | `ResidualStackedBiLSTM` | lineal 768 → 256 + GELU, `nn.LSTM(256, 128, 2 capas, bidirectional)` | 3 lineales sobre `[h_t ; token proyectado]` | `(B, T, 3, 4)` | 993 K |
 | `joint_conv_bilstm` | `ConvBiLSTM` | `Conv1d(768, 256, ventana 3)` + GELU, `nn.LSTM(256, 128, bidirectional)` | 3 lineales | `(B, T, 3, 4)` | 988 K |
 
-- Las redes de cada problema están en [`src/problem/<problema>/`](../src/problem/); las
-  conjuntas en [`src/joint_rnn.py`](../src/joint_rnn.py), y sus variantes (las últimas tres
-  filas, con dropout 0.3) en [`src/joint_networks.py`](../src/joint_networks.py), que explica
-  qué prueba cada una.
+- Las redes de cada problema están en [`src/problem/<problema>/`](../src/problem/) y las
+  conjuntas en [`src/problem/joint/`](../src/problem/joint/), un archivo por red. Las variantes
+  (las últimas tres filas, con dropout 0.3) se explican en
+  [`src/problem/joint/__init__.py`](../src/problem/joint/__init__.py).
 - **Varias tareas en un tensor**: las tareas con menos clases se completan con logits `-inf`
   hasta 4 clases. Como $e^{-\infty} = 0$, en el softmax
   $P(c) = e^{z_c} / \sum_{c'} e^{z_{c'}}$ esas clases inventadas tienen probabilidad 0: nunca se predicen ni cambian la

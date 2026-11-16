@@ -1,5 +1,5 @@
 """Experimentos conjuntos (`joint_rnn`, `bidirectional_joint_lstm`, las variantes de
-src/joint_networks.py, etc.): una red que aprende capitalización y puntuación a la vez.
+src/problem/joint/, etc.): una red que aprende capitalización y puntuación a la vez.
 
 Las demás redes se entrenan solo con las etiquetas del problema. Esta necesita las 3
 etiquetas de cada token, así que se arma un `JointDataset` con las mismas oraciones y se le
@@ -12,9 +12,8 @@ from collections.abc import Callable
 from torch import nn
 from torch.utils.data import DataLoader, Dataset, Subset
 
-from src.data import build_loader
+from src.data import JointDataset, build_loader
 from src.features import TextFeatureExtractor
-from src.joint_rnn import JointDataset
 from src.metrics import JointMetric
 from src.metrics.base import WordLevelTask
 from src.problem import Problem

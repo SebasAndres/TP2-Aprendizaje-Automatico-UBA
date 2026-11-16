@@ -5,6 +5,9 @@ por ejemplo desde notebooks/poster.ipynb:
 
     {
       "config": {...},                         # tamaños, ventana, hiperparámetros
+      "data": {                                # instancias y palabras de cada split, por problema
+        "CapitalizationProblem": {"train": {"instances": 9856, "words": 317204}, "test": {...}, "control": {...}}
+      },
       "problems": {
         "CapitalizationProblem": {
           "bidirectional_rnn": {
@@ -25,7 +28,10 @@ from pathlib import Path
 from typing import Any
 
 from sklearn.metrics import confusion_matrix
+from torch.utils.data import Dataset
 
+from src.data import split_dataset_dev_control, split_train_test
+from src.data.samples import Sample
 from src.metrics.base import WordLevelTask, macro_f1
 from src.training.result import TrainResult
 
@@ -53,6 +59,18 @@ def experiment_report(result: TrainResult, control: TrainResult | None) -> dict[
         "best_epoch": result.best_epoch,
         "history": [epoch._asdict() for epoch in result.history],
     }
+
+
+def data_report(samples: list[Sample]) -> dict[str, dict[str, int]]:
+    """Instancias y palabras de train, test y control, con los mismos splits que el pipeline
+    (dependen solo de la cantidad de instancias y la semilla)"""
+    development, control = split_dataset_dev_control(samples)
+    train, test = split_train_test(development)
+    return {name: _split_size(split) for name, split in (("train", train), ("test", test), ("control", control))}
+
+
+def _split_size(split: Dataset) -> dict[str, int]:
+    return {"instances": len(split), "words": sum(len(split[i]) for i in range(len(split)))}
 
 
 def save_report(run_dir: Path, report: dict[str, Any]) -> Path:

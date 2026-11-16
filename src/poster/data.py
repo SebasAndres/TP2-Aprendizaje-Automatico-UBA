@@ -18,7 +18,14 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from src.constants import CAPITALIZATION_DATASET_SIZE, MODELS_DIR, PUNCTUATION_DATASET_SIZE, RUN_SEPARATOR
-from src.data import build_loader, preprocess_dataset, split_dataset_dev_control, split_train_test
+from src.data import (
+    build_loader,
+    load_documents,
+    load_samples,
+    preprocess_dataset,
+    split_dataset_dev_control,
+    split_train_test,
+)
 from src.data.samples import WindowSpec
 from src.features import AverageEmbeddingsExtractor, TextFeatureExtractor
 from src.inference import available_models, load_model, model_name
@@ -27,7 +34,7 @@ from src.metrics.base import WordLevelTask
 from src.problem import CapitalizationProblem, Problem, PunctuationProblem
 from src.training import Experiment, build_experiments
 from src.training.classic import ClassicModel
-from src.training.report import REPORT_FILE, save_report, tasks_report
+from src.training.report import REPORT_FILE, data_report, save_report, tasks_report
 from src.words import concat_word_ids, token_word_ids
 
 logger = logging.getLogger(__name__)
@@ -59,11 +66,23 @@ def load_run(
     run_dir = Path(run_dir)
     path = run_dir / REPORT_FILE
     if path.exists():
-        return json.loads(path.read_text(encoding="utf-8"))
-    logger.warning("%s no tiene %s: reevaluando sus modelos (tarda unos minutos)", run_dir, REPORT_FILE)
-    report = reevaluate_run(run_dir, capitalization_size, punctuation_size, window)
+        report = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        logger.warning("%s no tiene %s: reevaluando sus modelos (tarda unos minutos)", run_dir, REPORT_FILE)
+        report = reevaluate_run(run_dir, capitalization_size, punctuation_size, window)
+    if "data" not in report:  # corridas de antes de que el pipeline guardara los tamaños
+        report["data"] = data_sizes(report["config"])
     logger.info("Reporte guardado en %s", save_report(run_dir, report))
     return report
+
+
+def data_sizes(config: dict[str, Any]) -> dict[str, dict[str, dict[str, int]]]:
+    """Instancias y palabras de train, test y control de cada problema, rearmando las instancias
+    con los tamaños y la ventana de la corrida (los splits son los mismos que en el pipeline)"""
+    window = WindowSpec(**config["window"]) if config.get("window") else None
+    documents = load_documents()
+    sizes = {"CapitalizationProblem": config["capitalization_size"], "PunctuationProblem": config["punctuation_size"]}
+    return {problem: data_report(load_samples(documents, size, window)) for problem, size in sizes.items()}
 
 
 def reevaluate_run(

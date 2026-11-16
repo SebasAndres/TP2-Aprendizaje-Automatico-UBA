@@ -15,7 +15,7 @@ from src.data import preprocess_dataset, split_dataset_dev_control
 from src.data.samples import add_window_args, window_from_args
 from src.training import Experiment, build_experiments, evaluate_on_control, create_run_directory, problem_dir, train_models
 from src.training import neural
-from src.training.report import experiment_report, save_report
+from src.training.report import data_report, experiment_report, save_report
 from src.training.result import format_score
 from src.problem import CapitalizationProblem, PunctuationProblem
 
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     # Todo lo que guarda esta ejecución va a su propia carpeta: models/<día>__<hora>/
     run_dir = create_run_directory()
     logger.info("Guardando modelos en %s", run_dir)
-    report: dict[str, Any] = {"config": run_config(args), "problems": {}}
+    report: dict[str, Any] = {"config": run_config(args), "data": {}, "problems": {}}
 
     # Para cada problema
     # obs: podría ser paralelo, no creo alcance la RAM
@@ -109,6 +109,7 @@ if __name__ == '__main__':
         logger.info("Problema: %s (%d instancias)", type(problem).__name__, len(dataset))
 
         development_set, control_set = split_dataset_dev_control(dataset)
+        report["data"][type(problem).__name__] = data_report(dataset.samples)
         logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
 
         model_dir = problem_dir(run_dir, problem)

@@ -39,6 +39,22 @@ MODEL_LABELS = {
     "joint_residual_stacked_bilstm": "BiLSTM 2 capas + residual",
     "joint_conv_bilstm": "Conv + BiLSTM conjunta",
 }
+# Color y marcador fijos de cada red en las curvas de aprendizaje: siguen al modelo, no a su
+# posición en el ranking. La paleta validada tiene 8 colores; el noveno (marrón) se eligió
+# lejos de todos ellos. Con 9 curvas que se cruzan algunos pares igual se parecen (ΔE ~13 en
+# OKLab), así que cada red lleva además su propio marcador. Las unidireccionales (que quedan
+# abajo) llevan los colores que más se confunden con los de las bidireccionales
+NETWORK_STYLES = {
+    "standard_rnn": ("#2a78d6", "o"),                   # azul
+    "joint_rnn": ("#eb6834", "s"),                      # naranja
+    "joint_lstm": ("#1baf7a", "^"),                     # aqua
+    "bidirectional_rnn": ("#eda100", "D"),              # amarillo
+    "bidirectional_joint_rnn": ("#e87ba4", "v"),        # magenta
+    "bidirectional_joint_lstm": ("#008300", "P"),       # verde
+    "joint_projected_bigru": ("#6250d6", "X"),          # violeta
+    "joint_residual_stacked_bilstm": ("#e34948", "*"),  # rojo
+    "joint_conv_bilstm": ("#7a4a1e", "h"),              # marrón
+}
 SPLIT_LABELS = {"test": "test", "control": "control"}
 PROBLEM_LABELS = {"CapitalizationProblem": "capitalización", "PunctuationProblem": "puntuación"}
 # Nombres de las clases para el póster (un "," o un "." sueltos casi no se ven)
@@ -52,13 +68,15 @@ CLASS_LABELS = {
 # --- Datos ---
 
 def model_tasks(report: Report, split: str) -> ModelTasks:
-    """Las tareas de cada modelo en ese split, juntando los dos problemas, en el orden de MODEL_LABELS"""
+    """Las tareas de cada modelo en ese split, juntando los dos problemas, del mejor al peor según
+    el promedio del F1 macro de sus tareas (empates: en el orden de MODEL_LABELS)"""
     merged: ModelTasks = {}
     for models in report["problems"].values():
         for model, model_report in models.items():
             if model_report.get(split):
                 merged.setdefault(model, {}).update(model_report[split])
     order = [model for model in MODEL_LABELS if model in merged] + sorted(set(merged) - set(MODEL_LABELS))
+    order.sort(key=lambda model: -np.mean([task["f1_macro"] for task in merged[model].values()]))
     return {model: merged[model] for model in order}
 
 
@@ -117,6 +135,41 @@ def _title(fig: Figure, title: str) -> None:
     """Título general arriba a la izquierda (tight_layout ya le reserva su lugar)"""
     fig.suptitle(title, x=0.01, ha="left", fontsize=13, color=TEXT_PRIMARY)
     fig.tight_layout()
+
+
+def _thousands(n: int) -> str:
+    """9856 -> '9.856'"""
+    return f"{n:,}".replace(",", ".")
+
+
+def _splits_text(splits: dict[str, dict[str, int]]) -> str:
+    """Ej: 'train 9.856 instancias (317.204 palabras), test 2.464, control 3.080'"""
+    train = splits["train"]
+    return (f"train {_thousands(train['instances'])} instancias ({_thousands(train['words'])} palabras), "
+            f"test {_thousands(splits['test']['instances'])}, control {_thousands(splits['control']['instances'])}")
+
+
+def data_caption(report: Report) -> str:
+    """Con cuántos datos y épocas se entrenó la corrida, para el pie de cada gráfico. Si los dos
+    problemas usaron las mismas instancias se dice una vez; si no, una por problema"""
+    config, data = report["config"], report.get("data", {})
+    texts = {problem: _splits_text(splits) for problem, splits in data.items()}
+    if len(set(texts.values())) == 1:
+        parts = [next(iter(texts.values())) + " por problema"]
+    else:
+        parts = [f"{PROBLEM_LABELS.get(problem, problem)}: {text}" for problem, text in texts.items()]
+    if window := config.get("window"):
+        parts.append(f"ventanas de {window['min_size']}–{window['max_size']} palabras")
+    if epochs := config.get("n_epochs"):
+        parts.append(f"redes: {epochs} épocas")
+    return "Datos: " + " · ".join(parts)
+
+
+def add_caption(fig: Figure, caption: str) -> None:
+    """Agrega una línea al pie del gráfico, achicando los paneles para que entre"""
+    height = fig.get_figheight()
+    fig.subplots_adjust(bottom=fig.subplotpars.bottom + 0.45 / height)
+    fig.text(0.01, 0.08 / height, caption, ha="left", va="bottom", fontsize=9, color=TEXT_SECONDARY)
 
 
 def save_figure(fig: Figure, out_dir: str | Path, name: str) -> None:
@@ -223,24 +276,42 @@ def plot_pairs_by_class(report: Report, split: str, pairs: list[tuple[str, str]]
     return fig
 
 
+def _test_curve(model_report: Report) -> tuple[list[int], list[float]]:
+    """Épocas y F1 macro promedio en test de cada una, sobre las tareas del problema (las redes
+    conjuntas tienen historial de las 3)"""
+    tasks = list(model_report["test"])
+    epochs = [epoch["epoch"] for epoch in model_report["history"]]
+    scores = [float(np.mean([epoch["test_score"][task] for task in tasks])) for epoch in model_report["history"]]
+    return epochs, scores
+
+
+def _curve_style(model: str) -> dict[str, Any]:
+    """Color y marcador fijos de la red (gris con círculo si es una red nueva sin estilo asignado)"""
+    color, marker = NETWORK_STYLES.get(model, (TEXT_SECONDARY, "o"))
+    return {"color": color, "marker": marker}
+
+
+def _kept_score(curve: tuple[list[int], list[float]], best_epoch: int | None) -> float:
+    """F1 en test de la época con la que se quedó la red (el máximo si no lo dice)"""
+    epochs, scores = curve
+    return scores[epochs.index(best_epoch)] if best_epoch else max(scores)
+
+
 def plot_learning_curves(report: Report, problem: str) -> Figure | None:
-    """F1 macro promedio en test por época de cada red, solo sobre las tareas del problema (las
-    redes conjuntas tienen historial de las 3); el punto grande es la época con la que se quedó.
-    None si la corrida no tiene historial (corridas viejas)"""
-    models = {m: r for m, r in report["problems"][problem].items() if r.get("history")}
-    if not models:
+    """F1 macro promedio en test por época de cada red, con su color y marcador fijos; el marcador
+    grande es la época con la que se quedó. La leyenda va de mejor a peor (por el F1 de esa
+    época). None si la corrida no tiene historial (corridas viejas)"""
+    curves = {m: (_test_curve(r), r.get("best_epoch")) for m, r in report["problems"][problem].items() if r.get("history")}
+    if not curves:
         return None
     fig, ax = plt.subplots(figsize=(10, 4.2), facecolor=SURFACE)
-    for k, (model, model_report) in enumerate(models.items()):
-        epochs = [epoch["epoch"] for epoch in model_report["history"]]
-        tasks = list(model_report["test"])  # las tareas del problema
-        scores = [np.mean([epoch["test_score"][task] for task in tasks]) for epoch in model_report["history"]]
-        ax.plot(epochs, scores, color=SERIES_COLORS[k % len(SERIES_COLORS)], linewidth=2, marker="o",
-                markersize=4, label=label(model))
-        if model_report.get("best_epoch"):
-            best = model_report["best_epoch"]
-            ax.plot(best, scores[epochs.index(best)], "o", markersize=9, color=SERIES_COLORS[k % len(SERIES_COLORS)],
-                    markeredgecolor=SURFACE, markeredgewidth=2)
+    for model in sorted(curves, key=lambda m: _kept_score(*curves[m]), reverse=True):  # leyenda de mejor a peor
+        (epochs, scores), best = curves[model]
+        style = _curve_style(model)
+        ax.plot(epochs, scores, linewidth=2, markersize=5, label=label(model), **style)
+        if best:  # la época con la que se quedó: el mismo marcador, más grande y con borde
+            ax.plot(best, scores[epochs.index(best)], markersize=11, linestyle="none",
+                    markeredgecolor=SURFACE, markeredgewidth=1.5, **style)
     _style(ax, grid_axis="y")
     ax.set_xticks(epochs)  # épocas enteras
     ax.set_xlabel("época", color=TEXT_SECONDARY)

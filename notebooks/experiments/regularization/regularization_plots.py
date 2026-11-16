@@ -51,9 +51,10 @@ def summary_table(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def best_value(report: dict[str, Any], problem: str) -> float:
-    """El valor con mejor F1 promedio sobre control para ese problema"""
-    return max(report["problems"][problem], key=lambda run: _mean(run["control_f1"]))["value"]
+def best_value(report: dict[str, Any], problem: str, split: str = "test") -> float:
+    """El valor con mejor F1 promedio en `split` para ese problema. Se elige con test (como la
+    mejor época de cada red): control queda para confirmar, si no su F1 sale optimista"""
+    return max(report["problems"][problem], key=lambda run: _mean(run[f"{split}_f1"]))["value"]
 
 
 def _subplots(report: dict[str, Any], title: str) -> tuple[Figure, list[Any]]:

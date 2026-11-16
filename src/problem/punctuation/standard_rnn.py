@@ -1,3 +1,4 @@
+"""RNN estándar (unidireccional) para el problema de puntuación."""
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -6,9 +7,35 @@ from src.constants import EMBEDDING_DIM, HIDDEN_DIM, RANDOM_SEED
 
 
 class PunctuationRNN(nn.Module):
-    """
-    RNN estándar para Puntuación. 
-    Procesa la secuencia y devuelve logits para la puntuación inicial y final.
+    """RNN estándar (unidireccional) que predice la puntuación inicial y final de cada token.
+
+    Una RNN compartida calcula el estado oculto ``h_t`` de cada token y dos cabezas
+    lineales lo leen:
+
+    - puntuación inicial: 2 clases (``""``, ``"¿"``)
+    - puntuación final: 4 clases (``""``, ``","``, ``"."``, ``"?"``)
+
+    Parameters
+    ----------
+    input_dim : int, default=EMBEDDING_DIM
+        Dimensión del embedding de cada token (768 para BERT multilingüe).
+    hidden_dim : int, default=HIDDEN_DIM
+        Dimensión del estado oculto ``h_t``.
+
+    Attributes
+    ----------
+    rnn : torch.nn.RNN
+        Capa recurrente compartida por las dos tareas.
+    out_ini : torch.nn.Linear
+        Cabeza de puntuación inicial, de ``hidden_dim`` a 2.
+    out_fin : torch.nn.Linear
+        Cabeza de puntuación final, de ``hidden_dim`` a 4.
+
+    Notes
+    -----
+    Para devolver un único tensor, los logits de la puntuación inicial se completan
+    con ``-inf`` hasta 4 clases: esas clases inventadas tienen probabilidad 0, así
+    que nunca se predicen ni cambian la loss. Devuelve logits, sin softmax.
     """
 
     def __init__(
@@ -27,9 +54,20 @@ class PunctuationRNN(nn.Module):
         self.out_fin = nn.Linear(hidden_dim, 4)
 
     def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
-        """
-        x: (batch, n_tokens, input_dim), lengths: tokens reales de cada oración
-        -> logits: (batch, n_tokens, 2 tareas, 4 clases)
+        """Calcula los logits de puntuación inicial y final de cada token.
+
+        Parameters
+        ----------
+        x : torch.Tensor of shape (batch, n_tokens, input_dim)
+            Embeddings de las oraciones, con padding al final hasta ``n_tokens``.
+        lengths : list[int]
+            Cantidad de tokens reales de cada oración (``len(lengths) == batch``).
+
+        Returns
+        -------
+        torch.Tensor of shape (batch, n_tokens, 2, 4)
+            Logits por token, tarea y clase. ``[..., 0, :]`` es la puntuación
+            inicial (sus clases 2 y 3 valen ``-inf``) y ``[..., 1, :]`` la final.
         """
         # pack/pad: la RNN saltea el padding (en la bidireccional, la lectura hacia atrás
         # empezaría por los ceros de relleno)
@@ -51,6 +89,15 @@ class PunctuationRNN(nn.Module):
 
 
 def create_standard_rnn_model() -> PunctuationRNN:
-    """Crea la RNN estándar de puntuación, sin entrenar"""
+    """Crea la RNN estándar de puntuación, sin entrenar.
+
+    Fija la semilla antes de construirla para que todas las corridas arranquen
+    con los mismos pesos.
+
+    Returns
+    -------
+    PunctuationRNN
+        Red con las dimensiones por defecto de ``src.constants``.
+    """
     torch.manual_seed(RANDOM_SEED)  # Misma inicialización para pruebas justas
     return PunctuationRNN()

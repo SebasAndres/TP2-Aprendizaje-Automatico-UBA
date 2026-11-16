@@ -56,7 +56,45 @@ class JointDataset(CapitalizationDataset, PunctuationDataset):
 
 
 class JointRNN(nn.Module):
-    """RNN compartida + una cabeza lineal por tarea. Devuelve logits (sin softmax) por token"""
+    """RNN compartida + una cabeza lineal por tarea: capitalización y puntuación a la vez.
+
+    La RNN calcula el estado oculto ``h_t`` de cada token y tres cabezas lineales lo leen:
+
+    - capitalización: 4 clases (minúscula, Inicial, MiXta, MAYÚS)
+    - puntuación inicial: 2 clases (``""``, ``"¿"``)
+    - puntuación final: 4 clases (``""``, ``","``, ``"."``, ``"?"``)
+
+    Parameters
+    ----------
+    input_dim : int, default=EMBEDDING_DIM
+        Dimensión del embedding de cada token (768 para BERT multilingüe).
+    hidden_dim : int, default=HIDDEN_DIM
+        Dimensión del estado oculto de cada dirección.
+    bidirectional : bool, default=False
+        Si es ``True`` lee la oración en las dos direcciones y las cabezas reciben
+        ``[h→_t ; h←_t]``, de dimensión ``2 * hidden_dim``.
+
+    Attributes
+    ----------
+    rnn : torch.nn.RNN or torch.nn.LSTM
+        Capa recurrente compartida, creada por ``_recurrent_layer``.
+    capitalization_head : torch.nn.Linear
+        Cabeza de capitalización, a ``N_CAPITALIZATION_CLASSES`` clases.
+    initial_head : torch.nn.Linear
+        Cabeza de puntuación inicial, a ``len(INITIAL_LABELS)`` clases.
+    final_head : torch.nn.Linear
+        Cabeza de puntuación final, a ``len(FINAL_LABELS)`` clases.
+
+    See Also
+    --------
+    JointLSTM : la misma red con celdas LSTM.
+    JointDataset : dataset con las 3 etiquetas por token que espera esta red.
+
+    Notes
+    -----
+    Las tareas con menos clases se completan con ``-inf`` hasta ``max_clases`` (ver
+    ``_pad_classes``) para devolver un único tensor. Devuelve logits, sin softmax.
+    """
 
     def __init__(
         self,
@@ -78,8 +116,22 @@ class JointRNN(nn.Module):
         return nn.RNN(input_dim, hidden_dim, batch_first=True, bidirectional=bidirectional)
 
     def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
-        """x: (batch, n_tokens, input_dim), lengths: tokens reales de cada oración
-        -> logits: (batch, n_tokens, 3 tareas, max_clases)"""
+        """Calcula los logits de las 3 tareas para cada token.
+
+        Parameters
+        ----------
+        x : torch.Tensor of shape (batch, n_tokens, input_dim)
+            Embeddings de las oraciones, con padding al final hasta ``n_tokens``.
+        lengths : list[int]
+            Cantidad de tokens reales de cada oración (``len(lengths) == batch``).
+
+        Returns
+        -------
+        torch.Tensor of shape (batch, n_tokens, 3, max_clases)
+            Logits por token, tarea y clase. Las tareas van en el orden
+            capitalización, puntuación inicial, puntuación final, y las clases que
+            no existen en una tarea valen ``-inf``.
+        """
         # pack/pad: la RNN saltea el padding (en la bidireccional, la lectura hacia atrás
         # empezaría por los ceros de relleno)
         packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
@@ -90,9 +142,26 @@ class JointRNN(nn.Module):
 
 
 class JointLSTM(JointRNN):
-    """La misma red conjunta, con celdas LSTM: además del estado oculto h_t lleva una memoria
-    c_t que solo cambia a través de compuertas (olvidar, escribir, leer). Con el mismo
-    hidden_dim tiene ~4 veces los parámetros de la RNN simple"""
+    """La misma red conjunta de ``JointRNN``, con celdas LSTM.
+
+    Además del estado oculto ``h_t`` lleva una memoria ``c_t`` que solo cambia a
+    través de compuertas (olvidar, escribir, leer), así que conserva mejor el
+    contexto lejano. Con el mismo ``hidden_dim`` tiene ~4 veces los parámetros
+    recurrentes de la RNN simple.
+
+    Parameters
+    ----------
+    input_dim : int, default=EMBEDDING_DIM
+        Dimensión del embedding de cada token.
+    hidden_dim : int, default=HIDDEN_DIM
+        Dimensión del estado oculto (y de la memoria) de cada dirección.
+    bidirectional : bool, default=False
+        Si es ``True`` lee la oración en las dos direcciones.
+
+    See Also
+    --------
+    JointRNN : misma interfaz y misma salida.
+    """
 
     @staticmethod
     def _recurrent_layer(input_dim: int, hidden_dim: int, bidirectional: bool) -> nn.Module:
@@ -100,8 +169,29 @@ class JointLSTM(JointRNN):
 
 
 def _pad_classes(logits: list[torch.Tensor]) -> list[torch.Tensor]:
-    """Completa con -inf las tareas con menos clases para poder apilarlas. Con -inf la
-    clase inventada tiene probabilidad 0: nunca se predice ni cambia la loss"""
+    """Completa con ``-inf`` las tareas con menos clases para poder apilarlas.
+
+    Con ``-inf`` la clase inventada tiene probabilidad 0: nunca se predice ni cambia la loss.
+
+    Parameters
+    ----------
+    logits : list[torch.Tensor]
+        Logits de cada tarea, de shape ``(..., n_classes_tarea)``. Todas las
+        dimensiones salvo la última deben coincidir.
+
+    Returns
+    -------
+    list[torch.Tensor]
+        Los mismos logits, todos de shape ``(..., max_clases)``.
+
+    Examples
+    --------
+    >>> padded = _pad_classes([torch.zeros(1, 2), torch.zeros(1, 4)])
+    >>> [task.shape for task in padded]
+    [torch.Size([1, 4]), torch.Size([1, 4])]
+    >>> padded[0]
+    tensor([[0., 0., -inf, -inf]])
+    """
     n_classes = max(task.size(-1) for task in logits)
     return [
         nn.functional.pad(task, (0, n_classes - task.size(-1)), value=float("-inf"))
@@ -110,19 +200,54 @@ def _pad_classes(logits: list[torch.Tensor]) -> list[torch.Tensor]:
 
 
 def create_joint_rnn_model(bidirectional: bool = False) -> JointRNN:
-    """Crea la RNN conjunta, sin entrenar"""
+    """Crea la RNN conjunta, sin entrenar, con la semilla fija.
+
+    Parameters
+    ----------
+    bidirectional : bool, default=False
+        Si la RNN lee la oración en las dos direcciones.
+
+    Returns
+    -------
+    JointRNN
+        Red con las dimensiones por defecto de ``src.constants``.
+    """
     torch.manual_seed(RANDOM_SEED)  # misma inicialización de pesos en cada corrida
     return JointRNN(bidirectional=bidirectional)
 
 
 def create_joint_lstm_model(bidirectional: bool = False) -> JointLSTM:
-    """Crea la LSTM conjunta, sin entrenar"""
+    """Crea la LSTM conjunta, sin entrenar, con la semilla fija.
+
+    Parameters
+    ----------
+    bidirectional : bool, default=False
+        Si la LSTM lee la oración en las dos direcciones.
+
+    Returns
+    -------
+    JointLSTM
+        Red con las dimensiones por defecto de ``src.constants``.
+    """
     torch.manual_seed(RANDOM_SEED)
     return JointLSTM(bidirectional=bidirectional)
 
 
 def create_joint_model(bidirectional: bool = False, lstm: bool = False) -> JointRNN:
-    """La red conjunta pedida: RNN simple o LSTM, unidireccional o bidireccional"""
+    """Crea la red conjunta pedida, sin entrenar.
+
+    Parameters
+    ----------
+    bidirectional : bool, default=False
+        Si la red lee la oración en las dos direcciones.
+    lstm : bool, default=False
+        Si usa celdas LSTM (``JointLSTM``) en lugar de la RNN simple (``JointRNN``).
+
+    Returns
+    -------
+    JointRNN
+        Una ``JointRNN`` o una ``JointLSTM`` (que hereda de ``JointRNN``).
+    """
     return create_joint_lstm_model(bidirectional) if lstm else create_joint_rnn_model(bidirectional)
 
 

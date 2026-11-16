@@ -1,4 +1,5 @@
 """RNN estándar (unidireccional) para el problema de capitalización."""
+
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -44,7 +45,7 @@ class CapitalizationRNN(nn.Module):
     ):
         super().__init__()
         self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True)  # W_x, W_h, b
-        self.out = nn.Linear(hidden_dim, n_classes)                  # W_y, b_y
+        self.out = nn.Linear(hidden_dim, n_classes)  # W_y, b_y
 
     def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
         """Calcula los logits de capitalización de cada token.
@@ -66,7 +67,9 @@ class CapitalizationRNN(nn.Module):
         # empezaría por los ceros de relleno)
         packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
         h, _ = self.rnn(packed)
-        h, _ = pad_packed_sequence(h, batch_first=True, total_length=x.size(1))  # h: (batch, n_tokens, hidden_dim), un h_t por token
+        h, _ = pad_packed_sequence(
+            h, batch_first=True, total_length=x.size(1)
+        )  # h: (batch, n_tokens, hidden_dim), un h_t por token
         return self.out(h)
 
 

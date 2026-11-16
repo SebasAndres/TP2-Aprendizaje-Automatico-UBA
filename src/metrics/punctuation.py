@@ -19,12 +19,10 @@ class PunctuationMetric(Metric):
         word_real, word_pred = self.word_labels(real, word_ids), self.word_labels(pred, word_ids)
         return {
             "punt_inicial": (word_real[:, 0], word_pred[:, 0], len(INITIAL_LABELS)),
-            "punt_final": (word_real[:, 1], word_pred[:, 1], len(FINAL_LABELS))
+            "punt_final": (word_real[:, 1], word_pred[:, 1], len(FINAL_LABELS)),
         }
 
-    def loss(
-        self, logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None
-    ) -> torch.Tensor:
+    def loss(self, logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None) -> torch.Tensor:
         """Suma de la CrossEntropy de la puntuación inicial y la final, ignorando el padding.
         logits: (batch, n_tokens, 2 tareas, 4 clases), real: (batch, n_tokens, 2 tareas)"""
         return multitask_cross_entropy(logits, real, class_weights)

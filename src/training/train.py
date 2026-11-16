@@ -31,10 +31,12 @@ from src.training.result import TrainResult, format_score, mean_score
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass(frozen=True)
 class Experiment:
     """Un modelo a entrenar junto con el extractor de features que recibe y cómo predecir
     con él una vez entrenado (para evaluarlo sobre control)"""
+
     name: str
     trainer: Callable[[DataLoader, DataLoader, TextFeatureExtractor, Problem], TrainResult]
     evaluator: Evaluator
@@ -45,79 +47,61 @@ def build_experiments() -> list[Experiment]:
     """Define las combinaciones de modelo y features que pide el enunciado"""
     embeddings = EmbeddingsExtractor()
     return [
-        Experiment(
-            "classic_features", 
-            train_classic_model, 
-            evaluate_classic_model, 
-            ClassicFeatureExtractor()
-        ),
+        Experiment("classic_features", train_classic_model, evaluate_classic_model, ClassicFeatureExtractor()),
         Experiment(
             "classic_features_dictionary",
             classic_trainer(use_dictionary=True),
             evaluate_classic_model,
-            ClassicFeatureExtractor()
+            ClassicFeatureExtractor(),
         ),
+        Experiment("classic_embeddings", train_classic_model, evaluate_classic_model, AverageEmbeddingsExtractor()),
         Experiment(
-            "classic_embeddings", 
-            train_classic_model, 
-            evaluate_classic_model, 
-            AverageEmbeddingsExtractor()
-        ),
-        Experiment(
-            "standard_rnn", 
+            "standard_rnn",
             neural_trainer(lambda problem: problem.standard_rnn_model()),
-            evaluate_problem_network, 
-            embeddings
+            evaluate_problem_network,
+            embeddings,
         ),
         Experiment(
-            "bidirectional_rnn", 
+            "bidirectional_rnn",
             neural_trainer(lambda problem: problem.bidirectional_rnn_model()),
-            evaluate_problem_network, 
-            embeddings
+            evaluate_problem_network,
+            embeddings,
         ),
         Experiment(
-            "joint_rnn", 
+            "joint_rnn",
             joint_trainer(lambda: create_joint_model(bidirectional=False)),
-            evaluate_joint_model, 
-            embeddings
+            evaluate_joint_model,
+            embeddings,
         ),
         Experiment(
-            "bidirectional_joint_rnn", 
+            "bidirectional_joint_rnn",
             joint_trainer(lambda: create_joint_model(bidirectional=True)),
-            evaluate_joint_model, 
-            embeddings
+            evaluate_joint_model,
+            embeddings,
         ),
         Experiment(
-            "joint_lstm", 
+            "joint_lstm",
             joint_trainer(lambda: create_joint_model(bidirectional=False, lstm=True)),
-            evaluate_joint_model, 
-            embeddings
+            evaluate_joint_model,
+            embeddings,
         ),
         Experiment(
-            "bidirectional_joint_lstm", 
+            "bidirectional_joint_lstm",
             joint_trainer(lambda: create_joint_model(bidirectional=True, lstm=True)),
-            evaluate_joint_model, 
-            embeddings
+            evaluate_joint_model,
+            embeddings,
         ),
         # Variantes de la red conjunta, ver src/joint_networks.py
         Experiment(
-            "joint_projected_bigru",
-            joint_trainer(create_projected_bigru_model),
-            evaluate_joint_model,
-            embeddings
+            "joint_projected_bigru", joint_trainer(create_projected_bigru_model), evaluate_joint_model, embeddings
         ),
         Experiment(
             "joint_residual_stacked_bilstm",
             joint_trainer(create_residual_stacked_bilstm_model),
             evaluate_joint_model,
-            embeddings
+            embeddings,
         ),
-        Experiment(
-            "joint_conv_bilstm",
-            joint_trainer(create_conv_bilstm_model),
-            evaluate_joint_model,
-            embeddings
-        ),
+        Experiment("joint_conv_bilstm", joint_trainer(create_conv_bilstm_model), evaluate_joint_model, embeddings),
     ]
 
 
@@ -156,17 +140,15 @@ def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_na
     elif result.model is not None:
         joblib.dump(result.model, _with_ext(file_stem, ".joblib"), compress=3)
     if result.history:
-        save_training_plot(result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train y test)",
-                           result.best_epoch)
+        save_training_plot(
+            result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train y test)", result.best_epoch
+        )
     elif result.test_tasks:
         save_class_metrics_plot(result.per_class, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (test)")
 
 
 def train_models(
-    development_dataset: Dataset,
-    experiments: list[Experiment],
-    problem: Problem,
-    model_dir: Path
+    development_dataset: Dataset, experiments: list[Experiment], problem: Problem, model_dir: Path
 ) -> dict[str, TrainResult]:
     """
     Acá se entrena y devuelve TODOS los modelos para el dataset dado, guardándolos en model_dir.
@@ -187,22 +169,22 @@ def train_models(
         logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(result.score))
         results[experiment.name] = result
 
-    save_confusion_matrices(results, model_dir / "confusion_matrices.png", f"{problem_name} · matrices de confusión (test)")
+    save_confusion_matrices(
+        results, model_dir / "confusion_matrices.png", f"{problem_name} · matrices de confusión (test)"
+    )
     return results
 
 
 def evaluate_on_control(
-    control_dataset: Dataset,
-    experiment: Experiment,
-    result: TrainResult,
-    problem: Problem,
-    model_dir: Path
+    control_dataset: Dataset, experiment: Experiment, result: TrainResult, problem: Problem, model_dir: Path
 ) -> TrainResult:
     """Evalúa sobre control el modelo ya entrenado del experimento. Devuelve un TrainResult
     cuyas tareas son las de control, y guarda en model_dir su precision/recall por clase y
     sus matrices de confusión"""
     loader = build_loader(control_dataset, shuffle=False)
-    control = TrainResult(result.model, experiment.evaluator(result.model, loader, experiment.feature_extractor, problem))
+    control = TrainResult(
+        result.model, experiment.evaluator(result.model, loader, experiment.feature_extractor, problem)
+    )
 
     problem_name = problem.__class__.__name__
     file_stem = model_dir / RUN_SEPARATOR.join(("control", experiment.name))

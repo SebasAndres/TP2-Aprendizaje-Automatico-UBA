@@ -15,6 +15,7 @@ de documentos, donde un documento es una lista de oraciones de texto continuo:
 Los documentos guardan el texto con su puntuación y capitalización originales: las etiquetas
 las calculan después los datasets.
 """
+
 import gzip
 import hashlib
 import re
@@ -94,10 +95,7 @@ def _read_subtitle_file(path: Path) -> Document:
     continuo y se separa en oraciones"""
     text = _read_text(path).replace("\r", "")
     blocks = [clean_text(block) for block in re.split(r"\n\s*\n", _INVISIBLE.sub("", text))]
-    unique_blocks = [
-        block for i, block in enumerate(blocks)
-        if block and (i == 0 or block != blocks[i - 1])
-    ]
+    unique_blocks = [block for i, block in enumerate(blocks) if block and (i == 0 or block != blocks[i - 1])]
     talk = _DIALOGUE_DASH.sub(r"\1", " ".join(unique_blocks))
     return split_sentences(talk)
 
@@ -136,7 +134,8 @@ def _srt_subtitles(text: str) -> list[str]:
     subtitles = []
     for block in re.split(r"\n\s*\n", text.replace("\r", "")):
         lines = [
-            _SRT_DASH.sub("", clean_text(line)) for line in block.split("\n")
+            _SRT_DASH.sub("", clean_text(line))
+            for line in block.split("\n")
             if line.strip() and not _SRT_INDEX.match(line.strip()) and not _SRT_TIMESTAMP.search(line)
         ]
         subtitle = _SRT_INNER_DASH.sub(" ", clean_text(" ".join(line for line in lines if "♪" not in line)))

@@ -1,4 +1,5 @@
 """RNN bidireccional para el problema de puntuación."""
+
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -47,7 +48,7 @@ class PunctuationBidirectionalRNN(nn.Module):
         super().__init__()
         # 1. Activamos la lectura en ambas direcciones
         self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True, bidirectional=True)
-        
+
         # 2. Multiplicamos la entrada por 2 para las dos cabezas de salida
         self.out_ini = nn.Linear(hidden_dim * 2, 2)
         self.out_fin = nn.Linear(hidden_dim * 2, 4)
@@ -73,14 +74,14 @@ class PunctuationBidirectionalRNN(nn.Module):
         packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
         h, _ = self.rnn(packed)
         h, _ = pad_packed_sequence(h, batch_first=True, total_length=x.size(1))
-        
+
         logits_ini = self.out_ini(h)
         logits_fin = self.out_fin(h)
-        
+
         pad_shape = (x.size(0), x.size(1), 2)
-        pad = torch.full(pad_shape, float('-inf'), device=x.device)
+        pad = torch.full(pad_shape, float("-inf"), device=x.device)
         logits_ini_padded = torch.cat([logits_ini, pad], dim=-1)
-        
+
         return torch.stack([logits_ini_padded, logits_fin], dim=2)
 
 

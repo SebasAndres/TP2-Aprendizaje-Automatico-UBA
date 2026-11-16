@@ -86,9 +86,7 @@ class PredictionLog:
 
 
 def batch_to_tensors(
-    batch_X: list[list[str]],
-    batch_y: torch.Tensor,
-    feature_extractor: TextFeatureExtractor
+    batch_X: list[list[str]], batch_y: torch.Tensor, feature_extractor: TextFeatureExtractor
 ) -> tuple[torch.Tensor, torch.Tensor, list[list[str]]] | None:
     """Extrae las features de cada oración del batch y las rellena con ceros hasta el largo
     máximo. Omite las oraciones sin tokens; devuelve None si no queda ninguna.
@@ -107,7 +105,7 @@ def batch_to_tensors(
         return None
     tokens = [batch_X[i] for i in keep]
     X = pad_sequence([feature_extractor.extract(sentence) for sentence in tokens], batch_first=True)
-    Y = batch_y[keep, :X.size(1)]
+    Y = batch_y[keep, : X.size(1)]
     return X, Y, tokens
 
 
@@ -134,7 +132,7 @@ def _predict_with_loss(
     feature_extractor: TextFeatureExtractor,
     metric: Metric,
     device: torch.device,
-    weights: ClassWeights | None = None
+    weights: ClassWeights | None = None,
 ) -> tuple[PredictionLog, float]:
     """Predice sobre el loader sin entrenar. Devuelve las predicciones (sin padding) y la
     loss promedio por batch, pesada con `weights` como en train"""
@@ -159,7 +157,7 @@ def _evaluate(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     metric: Metric,
-    device: torch.device
+    device: torch.device,
 ) -> dict[str, WordLevelTask]:
     """Predice sobre test y devuelve las clases reales y predichas a nivel palabra de cada tarea"""
     log, _ = _predict_with_loss(model, test_loader, feature_extractor, metric, device)
@@ -174,16 +172,16 @@ def _train_step(
     metric: Metric,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
-    weights: ClassWeights | None
+    weights: ClassWeights | None,
 ) -> tuple[float, torch.Tensor]:
     """Actualiza los pesos con un batch. Devuelve la loss y la clase predicha de cada token (en CPU)"""
     logits = model(X.to(device), sentence_lengths(tokens))  # (n_oraciones, max_tokens, ..., n_clases)
     loss = metric.loss(logits, Y.to(device), weights)  # ignora el padding, pesa cada clase
     optimizer.zero_grad()  # borra los gradientes del batch anterior
-    loss.backward()        # calcula los gradientes (en una RNN: backpropagation through time)
+    loss.backward()  # calcula los gradientes (en una RNN: backpropagation through time)
     if GRAD_CLIP_NORM is not None:  # si la norma de todos los gradientes juntos supera el máximo, los escala
         nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
-    optimizer.step()       # actualiza todos los parámetros de la red
+    optimizer.step()  # actualiza todos los parámetros de la red
     return loss.item(), logits.detach().argmax(dim=-1).cpu()
 
 
@@ -200,7 +198,7 @@ def _train_epoch(
     metric: Metric,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
-    weights: ClassWeights | None
+    weights: ClassWeights | None,
 ) -> tuple[float, PredictionLog]:
     """Hace una pasada completa sobre train. Devuelve la loss promedio por batch y las
     predicciones que hizo la red sobre train durante la época"""
@@ -226,6 +224,7 @@ def _train_epoch(
 @dataclass
 class BestEpoch:
     """La época con mejor F1 en test hasta el momento: sus pesos y sus predicciones sobre test"""
+
     epoch: int
     score: float
     weights: dict[str, torch.Tensor]
@@ -248,7 +247,7 @@ def train_neural_model(
     metric: Metric,
     model: nn.Module,
     n_epochs: int | None = None,
-    class_weight_power: float = CLASS_WEIGHT_POWER
+    class_weight_power: float = CLASS_WEIGHT_POWER,
 ) -> TrainResult:
     """Entrena la red `n_epochs` épocas minimizando `metric.loss`, con cada clase pesada según
     su frecuencia en train (ver src/training/weights.py). Al final de cada época evalúa
@@ -260,8 +259,9 @@ def train_neural_model(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    logger.info("Entrenando %s en %s (%d parámetros)",
-                type(model).__name__, device, sum(p.numel() for p in model.parameters()))
+    logger.info(
+        "Entrenando %s en %s (%d parámetros)", type(model).__name__, device, sum(p.numel() for p in model.parameters())
+    )
 
     weights = class_weights(train_loader.dataset, class_weight_power)
 
@@ -270,8 +270,7 @@ def train_neural_model(
         train_loss, train_log = _train_epoch(model, train_loader, feature_extractor, metric, optimizer, device, weights)
         test_log, test_loss = _predict_with_loss(model, test_loader, feature_extractor, metric, device, weights)
         metrics = EpochMetrics(
-            epoch, train_loss, train_log.score(metric), train_log.per_class(metric),
-            test_loss, test_log.score(metric)
+            epoch, train_loss, train_log.score(metric), train_log.per_class(metric), test_loss, test_log.score(metric)
         )
         history.append(metrics)
         _log_epoch(metrics, n_epochs)
@@ -285,15 +284,17 @@ def train_neural_model(
 def _log_epoch(metrics: EpochMetrics, n_epochs: int) -> None:
     """Loguea la loss y el F1 de train y de test de la época"""
     logger.info("Época %d/%d  train: loss=%.4f  %s", metrics.epoch, n_epochs, metrics.loss, format_score(metrics.score))
-    logger.info("Época %d/%d  test:  loss=%.4f  %s",
-                metrics.epoch, n_epochs, metrics.test_loss, format_score(metrics.test_score))
+    logger.info(
+        "Época %d/%d  test:  loss=%.4f  %s",
+        metrics.epoch,
+        n_epochs,
+        metrics.test_loss,
+        format_score(metrics.test_score),
+    )
 
 
 def evaluate_neural_model(
-    model: nn.Module,
-    loader: DataLoader,
-    feature_extractor: TextFeatureExtractor,
-    metric: Metric
+    model: nn.Module, loader: DataLoader, feature_extractor: TextFeatureExtractor, metric: Metric
 ) -> dict[str, WordLevelTask]:
     """Predice con una red ya entrenada (en CPU) y devuelve las clases reales y predichas
     a nivel palabra de cada tarea. La red vuelve a quedar en CPU"""
@@ -304,10 +305,7 @@ def evaluate_neural_model(
 
 
 def evaluate_problem_network(
-    model: nn.Module,
-    loader: DataLoader,
-    feature_extractor: TextFeatureExtractor,
-    problem: Problem
+    model: nn.Module, loader: DataLoader, feature_extractor: TextFeatureExtractor, problem: Problem
 ) -> dict[str, WordLevelTask]:
     """`evaluate_neural_model` con la métrica del problema, con la firma de `Experiment.evaluator`"""
     return evaluate_neural_model(model, loader, feature_extractor, problem.metric)
@@ -316,11 +314,9 @@ def evaluate_problem_network(
 def neural_trainer(build_model: ModelFactory) -> Trainer:
     """Adapta `train_neural_model` a la firma de `Experiment.trainer`, fijando qué red entrenar.
     Si el problema no implementa esa red, devuelve un resultado vacío"""
+
     def trainer(
-        train_loader: DataLoader,
-        test_loader: DataLoader,
-        feature_extractor: TextFeatureExtractor,
-        problem: Problem
+        train_loader: DataLoader, test_loader: DataLoader, feature_extractor: TextFeatureExtractor, problem: Problem
     ) -> TrainResult:
         try:
             model = build_model(problem)
@@ -328,4 +324,5 @@ def neural_trainer(build_model: ModelFactory) -> Trainer:
             logger.warning("Red sin implementar para %s: %s", type(problem).__name__, error)
             return TrainResult(None)
         return train_neural_model(train_loader, test_loader, feature_extractor, problem.metric, model)
+
     return trainer

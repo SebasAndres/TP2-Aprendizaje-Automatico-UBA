@@ -24,6 +24,7 @@ Se necesita un modelo por problema, o una red conjunta (que predice los dos):
     uv run python -m src.predict datasets/eval.csv -o predicciones.csv \\
         -m models/<día>__<hora>/PunctuationProblem/<score>__bidirectional_joint_lstm.pkl
 """
+
 import csv
 from argparse import ArgumentParser
 from pathlib import Path
@@ -69,9 +70,7 @@ def capitalization_by_token(model: TokenPredictor, tokens: list[str], word_ids: 
     return by_word[word_ids]
 
 
-def punctuation_by_token(
-    model: TokenPredictor, tokens: list[str], word_ids: np.ndarray
-) -> tuple[list[str], list[str]]:
+def punctuation_by_token(model: TokenPredictor, tokens: list[str], word_ids: np.ndarray) -> tuple[list[str], list[str]]:
     """Signo inicial en el primer token de cada palabra y final en el último; "" en el resto"""
     pred = model.predict(tokens)[:, -2:].numpy()  # dos últimas columnas: [inicial, final]
     first, last = first_token_mask(word_ids), last_token_mask(word_ids)
@@ -80,17 +79,19 @@ def punctuation_by_token(
     return initials, finals
 
 
-def predict_instance(
-    rows: list[Row], capitalization: TokenPredictor, punctuation: TokenPredictor
-) -> list[Row]:
+def predict_instance(rows: list[Row], capitalization: TokenPredictor, punctuation: TokenPredictor) -> list[Row]:
     """Las filas de la instancia con las tres columnas predichas"""
     tokens = [row["token"] for row in rows]
     word_ids = token_word_ids(tokens)
     caps = capitalization_by_token(capitalization, tokens, word_ids)
     initials, finals = punctuation_by_token(punctuation, tokens, word_ids)
     return [
-        {**{column: row[column] for column in INPUT_COLUMNS},
-         "punt_inicial": initial, "punt_final": final, "capitalización": str(cap)}
+        {
+            **{column: row[column] for column in INPUT_COLUMNS},
+            "punt_inicial": initial,
+            "punt_final": final,
+            "capitalización": str(cap),
+        }
         for row, initial, final, cap in zip(rows, initials, finals, caps)
     ]
 
@@ -117,11 +118,17 @@ def predict_file(input_path: Path, output_path: Path, selection: ModelSelection)
 def main() -> None:
     parser = ArgumentParser(description="Predice puntuación y capitalización de un .csv tokenizado")
     parser.add_argument("input", type=Path, help="csv con las columnas instancia_id,token_id,token")
-    parser.add_argument("-o", "--output", type=Path, default=Path("predicciones.csv"),
-                        help="csv de salida (default: predicciones.csv)")
-    parser.add_argument("-m", "--model", action="append", type=Path, required=True,
-                        help="path a un .pkl o .joblib en models/<día>__<hora>/<Problema>/ (uno por problema, "
-                             "o una sola red conjunta)")
+    parser.add_argument(
+        "-o", "--output", type=Path, default=Path("predicciones.csv"), help="csv de salida (default: predicciones.csv)"
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        action="append",
+        type=Path,
+        required=True,
+        help="path a un .pkl o .joblib en models/<día>__<hora>/<Problema>/ (uno por problema, o una sola red conjunta)",
+    )
     args = parser.parse_args()
 
     transformers.logging.set_verbosity_error()

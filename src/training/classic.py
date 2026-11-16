@@ -14,6 +14,7 @@ el modelo aprendería a confiar ciegamente en el diccionario, cosa que en test n
 eso train se divide en N_FOLDS partes y cada oración usa el diccionario armado con las otras
 partes. Test, control e inferencia usan el diccionario de todo train.
 """
+
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -42,6 +43,7 @@ N_FOLDS = 5
 class ClassicModel:
     """Lo que se guarda de un modelo clásico: el estimador de sklearn y, si se usa, el
     diccionario de capitalización armado con train"""
+
     estimator: Any
     dictionary: CapitalizationDictionary | None = None
 
@@ -58,10 +60,7 @@ class ClassicModel:
 
 
 def _dataset_to_numpy(
-    dataset: Dataset,
-    feature_extractor: TextFeatureExtractor,
-    metric: Metric,
-    model_for: Callable[[int], ClassicModel]
+    dataset: Dataset, feature_extractor: TextFeatureExtractor, metric: Metric, model_for: Callable[[int], ClassicModel]
 ) -> tuple[np.ndarray, np.ndarray]:
     """Matrices X (n_palabras, n_features) e Y (n_palabras,) o (n_palabras, n_tareas) de todo el
     dataset. La oración i usa las features de `model_for(i)`. Omite las oraciones sin tokens"""
@@ -86,9 +85,10 @@ def _train_features_source(train_set: Dataset, model: ClassicModel) -> Callable[
         return lambda i: model
     samples = dataset_samples(train_set)
     folds = [
-        ClassicModel(model.estimator, CapitalizationDictionary(
-            [sample for j, sample in enumerate(samples) if j % N_FOLDS != fold]
-        ))
+        ClassicModel(
+            model.estimator,
+            CapitalizationDictionary([sample for j, sample in enumerate(samples) if j % N_FOLDS != fold]),
+        )
         for fold in range(N_FOLDS)
     ]
     return lambda i: folds[i % N_FOLDS]
@@ -99,7 +99,7 @@ def train_classic_model(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem,
-    use_dictionary: bool = False
+    use_dictionary: bool = False,
 ) -> TrainResult:
     """Ajusta el modelo clásico del problema sobre train y devuelve sus predicciones sobre
     test a nivel palabra. No entrena por épocas, así que no tiene historial"""
@@ -121,21 +121,17 @@ def train_classic_model(
 
 def classic_trainer(use_dictionary: bool) -> Trainer:
     """`train_classic_model` con la firma de `Experiment.trainer`, fijando si usa el diccionario"""
+
     def trainer(
-        train_loader: DataLoader,
-        test_loader: DataLoader,
-        feature_extractor: TextFeatureExtractor,
-        problem: Problem
+        train_loader: DataLoader, test_loader: DataLoader, feature_extractor: TextFeatureExtractor, problem: Problem
     ) -> TrainResult:
         return train_classic_model(train_loader, test_loader, feature_extractor, problem, use_dictionary)
+
     return trainer
 
 
 def evaluate_classic_model(
-    model: ClassicModel,
-    loader: DataLoader,
-    feature_extractor: TextFeatureExtractor,
-    problem: Problem
+    model: ClassicModel, loader: DataLoader, feature_extractor: TextFeatureExtractor, problem: Problem
 ) -> dict[str, WordLevelTask]:
     """Predice con un modelo clásico ya ajustado y devuelve las clases reales y predichas
     a nivel palabra de cada tarea"""

@@ -5,8 +5,8 @@ from src.data.base import TextDataset, strip_punctuation
 Capitalization = int
 
 LOWERCASE: Capitalization = 0  # "hola"
-TITLE: Capitalization = 1      # "Hola" (incluye palabras de 1 letra)
-MIXED: Capitalization = 2      # "McDonald's", "iPhone"
+TITLE: Capitalization = 1  # "Hola" (incluye palabras de 1 letra)
+MIXED: Capitalization = 2  # "McDonald's", "iPhone"
 UPPERCASE: Capitalization = 3  # "ONU", "UBA" (más de una letra)
 
 # Nombre legible de cada clase, en el orden de sus valores
@@ -27,7 +27,6 @@ def word_capitalization(word: str) -> Capitalization:
 
 
 class CapitalizationDataset(TextDataset):
-
     def _expected_output(self, words: list[str], word_tokens: list[list[str]]) -> torch.Tensor:
         """Asigna la capitalización de cada palabra a todos sus tokens.
 
@@ -45,8 +44,6 @@ class CapitalizationDataset(TextDataset):
         qué letras van en mayúscula (ej: "McDonald's"), así que no se puede reconstruir solo con y.
         """
         labels = [
-            word_capitalization(strip_punctuation(word))
-            for word, tokens in zip(words, word_tokens)
-            for _ in tokens
+            word_capitalization(strip_punctuation(word)) for word, tokens in zip(words, word_tokens) for _ in tokens
         ]
         return torch.tensor(labels, dtype=torch.long)

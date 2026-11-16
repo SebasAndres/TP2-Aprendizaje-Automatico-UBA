@@ -12,3 +12,7 @@ dependencies = [
     "torch>=2.15.0",
     "transformers>=5.22.1",
 ]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["notebooks"]

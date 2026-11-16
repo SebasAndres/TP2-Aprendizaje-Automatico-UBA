@@ -10,6 +10,7 @@ Hay dos formas de cortar:
   El largo de cada ventana se sortea entre un mínimo y un máximo, para que el modelo vea
   entradas cortas y largas como las que puede recibir al predecir.
 """
+
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from typing import Literal
@@ -30,6 +31,7 @@ class WindowSpec:
     - uniform: cualquier largo entre min_size y max_size con la misma probabilidad
     - normal: centrada en el punto medio, con desvío (max - min) / 6, recortada a [min, max]
     Con min_size == max_size todas las ventanas tienen el mismo largo."""
+
     min_size: int = WINDOW_MIN_SIZE
     max_size: int = WINDOW_MAX_SIZE
     distribution: Distribution = WINDOW_DISTRIBUTION
@@ -80,12 +82,18 @@ def build_samples(documents: list[Document], window: WindowSpec | None) -> list[
 def add_window_args(parser: ArgumentParser) -> None:
     """Agrega a un CLI las opciones para elegir cómo cortar las instancias"""
     parser.add_argument(
-        "--window-size", type=int, nargs="+", metavar="N", default=[WINDOW_MIN_SIZE, WINDOW_MAX_SIZE],
+        "--window-size",
+        type=int,
+        nargs="+",
+        metavar="N",
+        default=[WINDOW_MIN_SIZE, WINDOW_MAX_SIZE],
         help="largo de las ventanas en palabras: MIN MAX para sortearlo, un solo N para un largo fijo, "
-             f"0 para una oración por instancia (default: {WINDOW_MIN_SIZE} {WINDOW_MAX_SIZE})",
+        f"0 para una oración por instancia (default: {WINDOW_MIN_SIZE} {WINDOW_MAX_SIZE})",
     )
     parser.add_argument(
-        "--window-distribution", choices=DISTRIBUTIONS, default=WINDOW_DISTRIBUTION,
+        "--window-distribution",
+        choices=DISTRIBUTIONS,
+        default=WINDOW_DISTRIBUTION,
         help=f"cómo se sortea el largo de cada ventana (default: {WINDOW_DISTRIBUTION})",
     )
 

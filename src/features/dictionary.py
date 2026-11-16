@@ -6,6 +6,7 @@ no se pueden deducir de las letras de la palabra. Se arma solo con instancias de
 Las palabras son las mismas que ven los modelos clásicos: los tokens unidos por "##" (ver
 split_words), así "mcdonald's" son 3 palabras: "mcdonald", "'" y "s".
 """
+
 import numpy as np
 
 from src.data import CapitalizationDataset

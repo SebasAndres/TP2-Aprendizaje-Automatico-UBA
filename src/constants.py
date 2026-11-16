@@ -1,9 +1,8 @@
-
-EMBEDDINGS_MODEL = 'bert-base-multilingual-cased'
+EMBEDDINGS_MODEL = "bert-base-multilingual-cased"
 
 # Dimensiones de las redes
 EMBEDDING_DIM = 768  # tamaño de los embeddings estáticos de BERT
-HIDDEN_DIM = 128     # tamaño del estado oculto h_t (hiperparámetro)
+HIDDEN_DIM = 128  # tamaño del estado oculto h_t (hiperparámetro)
 
 # Fuentes de texto: nombre -> ruta. Cada una tiene su lector en src/data/preprocess.py
 DATASET_SOURCES = {
@@ -23,8 +22,8 @@ MODELS_DIR = "models"
 RUN_SEPARATOR = "__"
 
 # Máximo de instancias que aporta CADA fuente, así la más grande (es.txt.gz) no tapa al resto
-CAPITALIZATION_DATASET_SIZE=1000
-PUNCTUATION_DATASET_SIZE=1000
+CAPITALIZATION_DATASET_SIZE = 1000
+PUNCTUATION_DATASET_SIZE = 1000
 
 # Peso de cada clase en la CrossEntropy de las redes: (N / (K · n_clase)) ** CLASS_WEIGHT_POWER.
 # 1 = cada clase pesa lo mismo, 0.5 = raíz (punto medio), 0 = sin pesos. Ver src/training/weights.py

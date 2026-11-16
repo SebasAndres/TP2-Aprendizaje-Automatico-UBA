@@ -6,7 +6,6 @@ from src.words import first_token_mask, token_word_ids
 
 
 class TextFeatureExtractor(ABC):
-
     @abstractmethod
     def extract(self, tokens: list[str]) -> torch.Tensor:
         """Recibe la secuencia de tokens BERT (ej: ['cu', '##ánd', '##o']) y devuelve sus

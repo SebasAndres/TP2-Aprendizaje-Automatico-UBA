@@ -5,6 +5,7 @@ capitalización) y puntuación inicial y final (del de puntuación). Los colores
 de src/training/plots.py: cada tarea tiene siempre el mismo color, y los modelos se nombran en
 el eje (son más que los colores que se distinguen bien).
 """
+
 from pathlib import Path
 from typing import Any
 
@@ -15,14 +16,24 @@ from matplotlib.figure import Figure
 
 from src.data.capitalization_dataset import CAPITALIZATION_NAMES
 from src.training.plots import (
-    GRID, SEQUENTIAL, SERIES_COLORS, SURFACE, TEXT_PRIMARY, TEXT_SECONDARY, plot_confusion_counts,
+    GRID,
+    SEQUENTIAL,
+    SERIES_COLORS,
+    SURFACE,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+    plot_confusion_counts,
 )
 
 Report = dict[str, Any]
 ModelTasks = dict[str, dict[str, dict[str, Any]]]  # modelo -> tarea -> {"f1_macro", "confusion"}
 
 TASKS = ["capitalizacion", "punt_inicial", "punt_final"]
-TASK_LABELS = {"capitalizacion": "Capitalización", "punt_inicial": "Puntuación inicial", "punt_final": "Puntuación final"}
+TASK_LABELS = {
+    "capitalizacion": "Capitalización",
+    "punt_inicial": "Puntuación inicial",
+    "punt_final": "Puntuación final",
+}
 TASK_COLORS = {task: SERIES_COLORS[i] for i, task in enumerate(TASKS)}
 # Orden fijo de los modelos en todos los gráficos, con su nombre para el póster
 MODEL_LABELS = {
@@ -45,15 +56,15 @@ MODEL_LABELS = {
 # OKLab), así que cada red lleva además su propio marcador. Las unidireccionales (que quedan
 # abajo) llevan los colores que más se confunden con los de las bidireccionales
 NETWORK_STYLES = {
-    "standard_rnn": ("#2a78d6", "o"),                   # azul
-    "joint_rnn": ("#eb6834", "s"),                      # naranja
-    "joint_lstm": ("#1baf7a", "^"),                     # aqua
-    "bidirectional_rnn": ("#eda100", "D"),              # amarillo
-    "bidirectional_joint_rnn": ("#e87ba4", "v"),        # magenta
-    "bidirectional_joint_lstm": ("#008300", "P"),       # verde
-    "joint_projected_bigru": ("#6250d6", "X"),          # violeta
+    "standard_rnn": ("#2a78d6", "o"),  # azul
+    "joint_rnn": ("#eb6834", "s"),  # naranja
+    "joint_lstm": ("#1baf7a", "^"),  # aqua
+    "bidirectional_rnn": ("#eda100", "D"),  # amarillo
+    "bidirectional_joint_rnn": ("#e87ba4", "v"),  # magenta
+    "bidirectional_joint_lstm": ("#008300", "P"),  # verde
+    "joint_projected_bigru": ("#6250d6", "X"),  # violeta
     "joint_residual_stacked_bilstm": ("#e34948", "*"),  # rojo
-    "joint_conv_bilstm": ("#7a4a1e", "h"),              # marrón
+    "joint_conv_bilstm": ("#7a4a1e", "h"),  # marrón
 }
 SPLIT_LABELS = {"test": "test", "control": "control"}
 PROBLEM_LABELS = {"CapitalizationProblem": "capitalización", "PunctuationProblem": "puntuación"}
@@ -66,6 +77,7 @@ CLASS_LABELS = {
 
 
 # --- Datos ---
+
 
 def model_tasks(report: Report, split: str) -> ModelTasks:
     """Las tareas de cada modelo en ese split, juntando los dos problemas, del mejor al peor según
@@ -119,6 +131,7 @@ def best_model(report: Report, problem: str, split: str) -> str:
 
 # --- Estilo ---
 
+
 def _style(ax: Axes, grid_axis: str = "x") -> None:
     """Grilla y ejes discretos, sin bordes de arriba ni de la derecha"""
     ax.set_facecolor(SURFACE)
@@ -145,8 +158,10 @@ def _thousands(n: int) -> str:
 def _splits_text(splits: dict[str, dict[str, int]]) -> str:
     """Ej: 'train 9.856 instancias (317.204 palabras), test 2.464, control 3.080'"""
     train = splits["train"]
-    return (f"train {_thousands(train['instances'])} instancias ({_thousands(train['words'])} palabras), "
-            f"test {_thousands(splits['test']['instances'])}, control {_thousands(splits['control']['instances'])}")
+    return (
+        f"train {_thousands(train['instances'])} instancias ({_thousands(train['words'])} palabras), "
+        f"test {_thousands(splits['test']['instances'])}, control {_thousands(splits['control']['instances'])}"
+    )
 
 
 def data_caption(report: Report) -> str:
@@ -181,6 +196,7 @@ def save_figure(fig: Figure, out_dir: str | Path, name: str) -> None:
 
 
 # --- Gráficos ---
+
 
 def plot_f1_by_task(report: Report, split: str) -> Figure:
     """Un panel por tarea con el F1 macro de cada modelo: la comparación general"""
@@ -217,8 +233,16 @@ def _class_axis(ax: Axes, separator: str, separator_width: float) -> None:
     for task in TASKS:
         width = sum(1 for t, _ in columns if t == task)
         # x en datos, y en fracción del eje: siempre justo arriba del gráfico
-        ax.text(start + (width - 1) / 2, 1.02, TASK_LABELS[task], transform=ax.get_xaxis_transform(),
-                ha="center", va="bottom", fontsize=10, color=TEXT_PRIMARY)
+        ax.text(
+            start + (width - 1) / 2,
+            1.02,
+            TASK_LABELS[task],
+            transform=ax.get_xaxis_transform(),
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            color=TEXT_PRIMARY,
+        )
         if start:
             ax.axvline(start - 0.5, color=separator, linewidth=separator_width)
         start += width
@@ -232,8 +256,15 @@ def plot_class_f1(report: Report, split: str) -> Figure:
     ax.imshow(np.ma.masked_invalid(values), cmap=SEQUENTIAL, vmin=0, vmax=1, aspect="auto")
     for (i, j), value in np.ndenumerate(values):
         if not np.isnan(value):
-            ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8,
-                    color=SURFACE if value > 0.55 else TEXT_PRIMARY)
+            ax.text(
+                j,
+                i,
+                f"{value:.2f}",
+                ha="center",
+                va="center",
+                fontsize=8,
+                color=SURFACE if value > 0.55 else TEXT_PRIMARY,
+            )
     ax.set_xticks(np.arange(-0.5, values.shape[1]), minor=True)
     ax.set_yticks(np.arange(-0.5, len(values)), minor=True)
     ax.grid(which="minor", color=SURFACE, linewidth=2)
@@ -301,7 +332,9 @@ def plot_learning_curves(report: Report, problem: str) -> Figure | None:
     """F1 macro promedio en test por época de cada red, con su color y marcador fijos; el marcador
     grande es la época con la que se quedó. La leyenda va de mejor a peor (por el F1 de esa
     época). None si la corrida no tiene historial (corridas viejas)"""
-    curves = {m: (_test_curve(r), r.get("best_epoch")) for m, r in report["problems"][problem].items() if r.get("history")}
+    curves = {
+        m: (_test_curve(r), r.get("best_epoch")) for m, r in report["problems"][problem].items() if r.get("history")
+    }
     if not curves:
         return None
     fig, ax = plt.subplots(figsize=(10, 4.2), facecolor=SURFACE)
@@ -310,8 +343,15 @@ def plot_learning_curves(report: Report, problem: str) -> Figure | None:
         style = _curve_style(model)
         ax.plot(epochs, scores, linewidth=2, markersize=5, label=label(model), **style)
         if best:  # la época con la que se quedó: el mismo marcador, más grande y con borde
-            ax.plot(best, scores[epochs.index(best)], markersize=11, linestyle="none",
-                    markeredgecolor=SURFACE, markeredgewidth=1.5, **style)
+            ax.plot(
+                best,
+                scores[epochs.index(best)],
+                markersize=11,
+                linestyle="none",
+                markeredgecolor=SURFACE,
+                markeredgewidth=1.5,
+                **style,
+            )
     _style(ax, grid_axis="y")
     ax.set_xticks(epochs)  # épocas enteras
     ax.set_xlabel("época", color=TEXT_SECONDARY)
@@ -324,9 +364,11 @@ def plot_learning_curves(report: Report, problem: str) -> Figure | None:
 def plot_confusions(report: Report, split: str, models: dict[str, str]) -> Figure:
     """Matrices de confusión normalizadas por fila (la diagonal es el recall) de un modelo por
     problema. models: problema -> modelo"""
-    panels = [(problem, model, task, confusion["confusion"])
-              for problem, model in models.items()
-              for task, confusion in report["problems"][problem][model][split].items()]
+    panels = [
+        (problem, model, task, confusion["confusion"])
+        for problem, model in models.items()
+        for task, confusion in report["problems"][problem][model][split].items()
+    ]
     fig, axes = plt.subplots(1, len(panels), figsize=(4.4 * len(panels), 4.4), facecolor=SURFACE, squeeze=False)
     for ax, (_, model, task, counts) in zip(axes[0], panels):
         plot_confusion_counts(ax, f"{label(model)} · {TASK_LABELS[task]}", task, np.array(counts), CLASS_LABELS[task])

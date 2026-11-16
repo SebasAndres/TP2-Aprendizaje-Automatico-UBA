@@ -35,9 +35,7 @@ def macro_f1(real: np.ndarray, pred: np.ndarray, n_classes: int) -> float:
 
 def precision_recall(real: np.ndarray, pred: np.ndarray, n_classes: int) -> dict[int, tuple[float, float]]:
     """(precision, recall) de cada clase, aunque alguna no aparezca en estos datos"""
-    precision, recall, _, _ = precision_recall_fscore_support(
-        real, pred, labels=range(n_classes), zero_division=0
-    )
+    precision, recall, _, _ = precision_recall_fscore_support(real, pred, labels=range(n_classes), zero_division=0)
     return {c: (float(precision[c]), float(recall[c])) for c in range(n_classes)}
 
 
@@ -46,18 +44,14 @@ ClassWeights = torch.Tensor
 Ver src/training/weights.py"""
 
 
-def token_cross_entropy(
-    logits: torch.Tensor, real: torch.Tensor, weight: torch.Tensor | None = None
-) -> torch.Tensor:
+def token_cross_entropy(logits: torch.Tensor, real: torch.Tensor, weight: torch.Tensor | None = None) -> torch.Tensor:
     """CrossEntropy por token ignorando el padding. logits: (..., n_clases), real: (...)
     weight: peso de cada clase (n_clases,) o None. Si tiene menos clases que los logits (tareas
     rellenadas con clases inventadas), se completa con 1: esas clases nunca son la real"""
     n_classes = logits.size(-1)
     if weight is not None:
         weight = F.pad(weight[:n_classes], (0, max(0, n_classes - weight.numel())), value=1.0).to(logits.device)
-    return F.cross_entropy(
-        logits.reshape(-1, n_classes), real.reshape(-1), weight=weight, ignore_index=IGNORE_INDEX
-    )
+    return F.cross_entropy(logits.reshape(-1, n_classes), real.reshape(-1), weight=weight, ignore_index=IGNORE_INDEX)
 
 
 def multitask_cross_entropy(
@@ -85,7 +79,6 @@ def per_class_from_tasks(tasks: dict[str, WordLevelTask]) -> PerClass:
 
 
 class Metric(ABC):
-
     tasks: tuple[str, ...]
     """Nombres de las tareas que evalúa, en el orden en que las devuelve `word_level`"""
 
@@ -111,9 +104,7 @@ class Metric(ABC):
         return per_class_from_tasks(self.word_level(pred, real, word_ids))
 
     @abstractmethod
-    def loss(
-        self, logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None
-    ) -> torch.Tensor:
+    def loss(self, logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None) -> torch.Tensor:
         """Función de pérdida a optimizar durante el entrenamiento. class_weights: peso de cada
         clase por columna de `real` (n_columnas, n_clases), o None para no pesar"""
         raise NotImplementedError

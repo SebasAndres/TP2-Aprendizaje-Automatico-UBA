@@ -16,6 +16,7 @@ si antes terminó una oración. Cada una cambia una idea respecto de `bidirectio
   primero una representación de cada token con sus vecinos, que suelen ser las otras
   piezas de la misma palabra ("pre", "##gun", "##ta"). Después la BiLSTM lee la oración.
 """
+
 import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -26,7 +27,7 @@ from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
 from src.joint_rnn import _pad_classes
 
 PROJECTION_DIM = 256  # tamaño de cada token después de la capa por token (proyección o convolución)
-DROPOUT = 0.3         # probabilidad de apagar cada valor durante el entrenamiento
+DROPOUT = 0.3  # probabilidad de apagar cada valor durante el entrenamiento
 TASK_CLASSES = (N_CAPITALIZATION_CLASSES, len(INITIAL_LABELS), len(FINAL_LABELS))
 
 
@@ -55,8 +56,9 @@ class JointHeads(nn.Module):
     def _head(in_dim: int, n_classes: int, hidden_dim: int | None) -> nn.Module:
         if hidden_dim is None:
             return nn.Linear(in_dim, n_classes)
-        return nn.Sequential(nn.Linear(in_dim, hidden_dim), nn.GELU(), nn.Dropout(DROPOUT),
-                             nn.Linear(hidden_dim, n_classes))
+        return nn.Sequential(
+            nn.Linear(in_dim, hidden_dim), nn.GELU(), nn.Dropout(DROPOUT), nn.Linear(hidden_dim, n_classes)
+        )
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
         """(batch, n_tokens, in_dim) -> logits (batch, n_tokens, 3, max_clases), como JointRNN"""
@@ -84,8 +86,9 @@ class ResidualStackedBiLSTM(nn.Module):
     def __init__(self, hidden_dim: int = HIDDEN_DIM, num_layers: int = 2):
         super().__init__()
         self.projection = token_projection()
-        self.rnn = nn.LSTM(PROJECTION_DIM, hidden_dim, num_layers=num_layers, dropout=DROPOUT,
-                           batch_first=True, bidirectional=True)
+        self.rnn = nn.LSTM(
+            PROJECTION_DIM, hidden_dim, num_layers=num_layers, dropout=DROPOUT, batch_first=True, bidirectional=True
+        )
         self.dropout = nn.Dropout(DROPOUT)
         self.heads = JointHeads(2 * hidden_dim + PROJECTION_DIM)
 

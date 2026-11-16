@@ -6,6 +6,7 @@ etiquetas de cada token, así que se arma un `JointDataset` con las mismas oraci
 aplican exactamente los mismos splits (desarrollo/control y train/test) que al dataset del
 problema. Después se evalúan solo las cabezas del problema, para compararla con el resto.
 """
+
 from collections.abc import Callable
 
 from torch import nn
@@ -50,7 +51,7 @@ def train_joint_model(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem,
-    build_model: Callable[[], nn.Module]
+    build_model: Callable[[], nn.Module],
 ) -> TrainResult:
     """Entrena la red conjunta que crea `build_model` con las 3 tareas y la evalúa solo en las
     tareas del problema"""
@@ -60,7 +61,7 @@ def train_joint_model(
         _joint_loader(test_loader, joint_dataset, shuffle=False),
         feature_extractor,
         JointMetric(),
-        build_model()
+        build_model(),
     )
     return result.only_tasks(problem.metric.tasks)
 
@@ -68,21 +69,17 @@ def train_joint_model(
 def joint_trainer(build_model: Callable[[], nn.Module]) -> Trainer:
     """`train_joint_model` con la firma de `Experiment.trainer`, fijando qué red conjunta entrenar.
     `build_model` crea la red sin entrenar, con salida (batch, n_tokens, 3, 4) como JointRNN"""
+
     def trainer(
-        train_loader: DataLoader,
-        test_loader: DataLoader,
-        feature_extractor: TextFeatureExtractor,
-        problem: Problem
+        train_loader: DataLoader, test_loader: DataLoader, feature_extractor: TextFeatureExtractor, problem: Problem
     ) -> TrainResult:
         return train_joint_model(train_loader, test_loader, feature_extractor, problem, build_model)
+
     return trainer
 
 
 def evaluate_joint_model(
-    model: nn.Module,
-    loader: DataLoader,
-    feature_extractor: TextFeatureExtractor,
-    problem: Problem
+    model: nn.Module, loader: DataLoader, feature_extractor: TextFeatureExtractor, problem: Problem
 ) -> dict[str, WordLevelTask]:
     """Predice con JointRNN ya entrenada sobre las oraciones de `loader` y devuelve solo
     las tareas del problema"""

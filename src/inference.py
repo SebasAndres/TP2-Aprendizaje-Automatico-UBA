@@ -21,6 +21,7 @@ pueden pasar directamente, salteando el menú de modelos:
 Se usa como máximo un modelo por problema. Si falta el de un problema y el otro es la red
 conjunta, la red conjunta predice los dos.
 """
+
 from argparse import ArgumentParser
 from dataclasses import dataclass
 from collections.abc import Callable
@@ -76,8 +77,13 @@ NETWORKS: dict[str, Callable[[Problem], nn.Module]] = {
 }
 # Redes que predicen las 3 tareas a la vez
 JOINT_NETWORKS = {
-    "joint_rnn", "bidirectional_joint_rnn", "joint_lstm", "bidirectional_joint_lstm",
-    "joint_projected_bigru", "joint_residual_stacked_bilstm", "joint_conv_bilstm",
+    "joint_rnn",
+    "bidirectional_joint_rnn",
+    "joint_lstm",
+    "bidirectional_joint_lstm",
+    "joint_projected_bigru",
+    "joint_residual_stacked_bilstm",
+    "joint_conv_bilstm",
 }
 CLASSIC_EXTRACTORS: dict[str, type[TextFeatureExtractor]] = {
     "classic_features": ClassicFeatureExtractor,
@@ -139,7 +145,9 @@ class LoadedModel:
     def __init__(self, path: Path):
         problem_name, name = problem_of(path), model_name(path)
         if problem_name not in PROBLEMS:
-            raise ValueError(f"No reconozco el problema de {path}: se espera models/<día>__<hora>/<{'|'.join(PROBLEMS)}>/...")
+            raise ValueError(
+                f"No reconozco el problema de {path}: se espera models/<día>__<hora>/<{'|'.join(PROBLEMS)}>/..."
+            )
         problem = PROBLEMS[problem_name]
         self.problem_name = problem_name
         self.name = f"{run_of(path.parent)}/{problem_name}/{path.stem}"
@@ -187,6 +195,7 @@ def _all_tokens(word_tokens: list[list[str]]) -> list[str]:
 @dataclass
 class ModelSelection:
     """Los modelos elegidos: como máximo uno por problema"""
+
     capitalization: LoadedModel | None = None
     punctuation: LoadedModel | None = None
 
@@ -300,8 +309,11 @@ def available_models(folder: Path) -> list[Path]:
     """Modelos de esa ejecución que este script sabe cargar, el de mejor score primero"""
     known = set(NETWORKS) | set(CLASSIC_EXTRACTORS)
     return sorted(
-        (path for path in folder.glob("*")
-         if path.suffix in KIND_LABELS and path.stem.count(RUN_SEPARATOR) == 1 and model_name(path) in known),
+        (
+            path
+            for path in folder.glob("*")
+            if path.suffix in KIND_LABELS and path.stem.count(RUN_SEPARATOR) == 1 and model_name(path) in known
+        ),
         reverse=True,
     )
 
@@ -329,7 +341,8 @@ def choose_model(problem_name: str, label: str) -> Path | str | None:
         if not folder:  # None (Ctrl+C) o '' (ninguno)
             return folder
         path = questionary.select(
-            f"Modelo de {label} ({run_of(folder)}):", choices=[_model_choice(p) for p in available_models(folder)] + [back]
+            f"Modelo de {label} ({run_of(folder)}):",
+            choices=[_model_choice(p) for p in available_models(folder)] + [back],
         ).ask()
         if path != "back":
             return path
@@ -373,21 +386,29 @@ def load_selection(paths: dict[str, Path]) -> ModelSelection:
 
 def print_selection(selection: ModelSelection) -> None:
     """Qué modelo predice cada problema"""
-    for label, model in (("capitalización", selection.for_capitalization()),
-                         ("puntuación", selection.for_punctuation())):
+    for label, model in (
+        ("capitalización", selection.for_capitalization()),
+        ("puntuación", selection.for_punctuation()),
+    ):
         print(f"  {label:<15} {'✓ ' + model.name if model else '— sin modelo'}")
 
 
 def choose_action(verbose: bool) -> str:
     """Menú principal. Ctrl+C equivale a salir"""
     detail = "Ocultar detalle por palabra" if verbose else "Mostrar detalle por palabra"
-    return questionary.select("¿Qué querés hacer?", choices=[
-        questionary.Choice("Probar un texto", value=ACTION_TEXT),
-        questionary.Choice("Cambiar modelos", value=ACTION_MODELS),
-        questionary.Choice(detail, value=ACTION_DETAIL),
-        questionary.Choice("Limpiar pantalla", value=ACTION_CLEAR),
-        questionary.Choice("Salir", value=ACTION_EXIT),
-    ]).ask() or ACTION_EXIT
+    return (
+        questionary.select(
+            "¿Qué querés hacer?",
+            choices=[
+                questionary.Choice("Probar un texto", value=ACTION_TEXT),
+                questionary.Choice("Cambiar modelos", value=ACTION_MODELS),
+                questionary.Choice(detail, value=ACTION_DETAIL),
+                questionary.Choice("Limpiar pantalla", value=ACTION_CLEAR),
+                questionary.Choice("Salir", value=ACTION_EXIT),
+            ],
+        ).ask()
+        or ACTION_EXIT
+    )
 
 
 def clear_screen(selection: ModelSelection) -> None:
@@ -422,15 +443,20 @@ def run_menu(selection: ModelSelection, tokenizer: BertTokenizer, verbose: bool)
             clear_screen(selection)
         elif action == ACTION_TEXT:
             try_texts(selection, tokenizer, verbose)
-        elif (paths := choose_models()):
+        elif paths := choose_models():
             selection = load_selection(paths)
 
 
 def main() -> None:
     parser = ArgumentParser(description="Reconstruye capitalización y puntuación de un texto con modelos entrenados")
-    parser.add_argument("-m", "--model", action="append", type=Path,
-                        help="path a un .pkl o .joblib en models/<día>__<hora>/<Problema>/ (uno por problema). "
-                             "Sin -m, se eligen desde un menú")
+    parser.add_argument(
+        "-m",
+        "--model",
+        action="append",
+        type=Path,
+        help="path a un .pkl o .joblib en models/<día>__<hora>/<Problema>/ (uno por problema). "
+        "Sin -m, se eligen desde un menú",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="mostrar la clase predicha de cada palabra")
     args = parser.parse_args()
 

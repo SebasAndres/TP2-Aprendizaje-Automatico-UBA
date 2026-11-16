@@ -8,6 +8,7 @@ class EpochMetrics(NamedTuple):
     """Métricas de una época. Sobre train: loss promedio, score del problema y
     (precision, recall) por clase. Sobre test, con la red al final de la época: loss
     promedio (con los mismos pesos por clase que train) y score del problema"""
+
     epoch: int
     loss: float
     score: dict[str, float]
@@ -20,6 +21,7 @@ class EpochMetrics(NamedTuple):
 class TrainResult:
     """Lo que devuelve cada trainer: el modelo, sus predicciones sobre test a nivel palabra
     y, si entrena por épocas, las métricas de cada época y la época con la que se quedó"""
+
     model: Any
     test_tasks: dict[str, WordLevelTask] = field(default_factory=dict, repr=False)
     history: list[EpochMetrics] = field(default_factory=list, repr=False)

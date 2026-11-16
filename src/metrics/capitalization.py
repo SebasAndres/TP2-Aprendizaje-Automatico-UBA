@@ -19,9 +19,7 @@ class CapitalizationMetric(Metric):
         word_pred = majority_by_word(pred, word_ids)
         return {"capitalizacion": (word_real, word_pred, N_CAPITALIZATION_CLASSES)}
 
-    def loss(
-        self, logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None
-    ) -> torch.Tensor:
+    def loss(self, logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None) -> torch.Tensor:
         """CrossEntropy ignorando el padding. logits: (batch, n_tokens, n_clases), real: (batch, n_tokens)
         class_weights: (1, n_clases) o None"""
         return token_cross_entropy(logits, real, None if class_weights is None else class_weights[0])

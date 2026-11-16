@@ -19,6 +19,7 @@ pueden correr solas, con las 3 tareas a la vez:
     uv run python -m src.joint_rnn --bidirectional      # RNN bidireccional
     uv run python -m src.joint_rnn --lstm               # LSTM en lugar de RNN simple
 """
+
 import argparse
 import logging
 
@@ -51,8 +52,8 @@ class JointDataset(CapitalizationDataset, PunctuationDataset):
 
     def _expected_output(self, words: list[str], word_tokens: list[list[str]]) -> torch.Tensor:
         capitalization = CapitalizationDataset._expected_output(self, words, word_tokens)  # (n_tokens,)
-        punctuation = PunctuationDataset._expected_output(self, words, word_tokens)        # (n_tokens, 2)
-        return torch.cat([capitalization.unsqueeze(1), punctuation], dim=1)                # (n_tokens, 3)
+        punctuation = PunctuationDataset._expected_output(self, words, word_tokens)  # (n_tokens, 2)
+        return torch.cat([capitalization.unsqueeze(1), punctuation], dim=1)  # (n_tokens, 3)
 
 
 class JointRNN(nn.Module):
@@ -193,10 +194,7 @@ def _pad_classes(logits: list[torch.Tensor]) -> list[torch.Tensor]:
     tensor([[0., 0., -inf, -inf]])
     """
     n_classes = max(task.size(-1) for task in logits)
-    return [
-        nn.functional.pad(task, (0, n_classes - task.size(-1)), value=float("-inf"))
-        for task in logits
-    ]
+    return [nn.functional.pad(task, (0, n_classes - task.size(-1)), value=float("-inf")) for task in logits]
 
 
 def create_joint_rnn_model(bidirectional: bool = False) -> JointRNN:
@@ -270,10 +268,16 @@ def main() -> None:
     from src.training.result import format_score
 
     parser = argparse.ArgumentParser(description="Entrena una RNN conjunta de capitalización y puntuación")
-    parser.add_argument("--size", type=int, default=None, help="usar como mucho N instancias de cada fuente (default: todas)")
+    parser.add_argument(
+        "--size", type=int, default=None, help="usar como mucho N instancias de cada fuente (default: todas)"
+    )
     add_window_args(parser)
-    parser.add_argument("--class-weight-power", type=float, default=CLASS_WEIGHT_POWER,
-                        help=f"peso de las clases raras en la loss: 1 = balanceado, 0 = sin pesos (default: {CLASS_WEIGHT_POWER})")
+    parser.add_argument(
+        "--class-weight-power",
+        type=float,
+        default=CLASS_WEIGHT_POWER,
+        help=f"peso de las clases raras en la loss: 1 = balanceado, 0 = sin pesos (default: {CLASS_WEIGHT_POWER})",
+    )
     parser.add_argument("--epochs", type=int, default=N_EPOCHS, help=f"épocas de entrenamiento (default: {N_EPOCHS})")
     parser.add_argument("--bidirectional", action="store_true", help="usar una RNN bidireccional")
     parser.add_argument("--lstm", action="store_true", help="usar celdas LSTM en lugar de la RNN simple")
@@ -289,8 +293,13 @@ def main() -> None:
     model = create_joint_model(args.bidirectional, args.lstm)
     name = joint_model_name(args.bidirectional, args.lstm)
     result = train_neural_model(
-        train_loader, test_loader, EmbeddingsExtractor(), JointMetric(), model,
-        n_epochs=args.epochs, class_weight_power=args.class_weight_power
+        train_loader,
+        test_loader,
+        EmbeddingsExtractor(),
+        JointMetric(),
+        model,
+        n_epochs=args.epochs,
+        class_weight_power=args.class_weight_power,
     )
     print(f"\n{name} - F1 macro sobre test: {format_score(result.score)}")
     if not args.no_save:

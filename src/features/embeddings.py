@@ -5,6 +5,7 @@ from src.constants import EMBEDDINGS_MODEL
 from src.features.base import TextFeatureExtractor
 from src.words import token_word_ids
 
+
 class EmbeddingsExtractor(TextFeatureExtractor):
     """Feature Extractor con embeddings, es token-a-token"""
 

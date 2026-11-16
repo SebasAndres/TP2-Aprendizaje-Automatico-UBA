@@ -23,6 +23,7 @@ por ejemplo desde notebooks/poster.ipynb:
 Por cada tarea se guarda la matriz de confusión a nivel palabra (fila = clase real, columna =
 clase predicha): de ella salen la precision, el recall y el F1 de cada clase.
 """
+
 import json
 from pathlib import Path
 from typing import Any

@@ -1,6 +1,13 @@
 from src.training.classic import train_classic_model
 from src.training.neural import neural_trainer, train_neural_model
-from src.training.train import Experiment, build_experiments, evaluate_on_control, create_run_directory, problem_dir, train_models
+from src.training.train import (
+    Experiment,
+    build_experiments,
+    evaluate_on_control,
+    create_run_directory,
+    problem_dir,
+    train_models,
+)
 
 __all__ = [
     "train_classic_model",

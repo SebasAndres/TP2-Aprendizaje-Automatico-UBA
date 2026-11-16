@@ -8,6 +8,7 @@ Cada palabra se describe con:
   existen). El modelo clásico no procesa secuencias, pero así cada fila trae algo de contexto:
   ej. si la siguiente palabra es "qué", es probable que esta lleve una coma o un punto
 """
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -19,8 +20,19 @@ VOCALES = set("aeiouáéíóúü")
 ACENTOS = set("áéíóú")
 # Con tilde solo en preguntas y exclamaciones, y el texto normalizado conserva las tildes
 INTERROGATIVAS = {
-    "qué", "quién", "quiénes", "cuál", "cuáles", "cuándo", "cuánto", "cuánta", "cuántos",
-    "cuántas", "dónde", "adónde", "cómo",
+    "qué",
+    "quién",
+    "quiénes",
+    "cuál",
+    "cuáles",
+    "cuándo",
+    "cuánto",
+    "cuánta",
+    "cuántos",
+    "cuántas",
+    "dónde",
+    "adónde",
+    "cómo",
 }
 # Cuántas palabras de cada lado se agregan como contexto
 CONTEXT_WORDS = 2
@@ -33,13 +45,13 @@ def _word_features(word: str, n_tokens: int) -> list[float]:
     return [
         float(length),
         float(num_vowels),
-        float(length - num_vowels),                    # consonantes (y otros caracteres)
-        num_vowels / length if length else 0.0,        # proporción de vocales
+        float(length - num_vowels),  # consonantes (y otros caracteres)
+        num_vowels / length if length else 0.0,  # proporción de vocales
         float(sum(char in ACENTOS for char in word)),  # acentos
-        float(n_tokens),                               # palabras raras se parten en más tokens
+        float(n_tokens),  # palabras raras se parten en más tokens
         float(word in INTERROGATIVAS),
         float(any(char.isdigit() for char in word)),
-        float(not word.isalpha()),                     # tiene signos o dígitos: "mcdonald's", "2x1"
+        float(not word.isalpha()),  # tiene signos o dígitos: "mcdonald's", "2x1"
     ]
 
 
@@ -55,7 +67,7 @@ def _context_features(own: torch.Tensor, context: int) -> torch.Tensor:
     n_words = own.size(0)
     padded = F.pad(own, (0, 0, context, context))  # filas de ceros arriba y abajo
     offsets = [offset for offset in range(-context, context + 1) if offset != 0]
-    return torch.cat([padded[context + offset: context + offset + n_words] for offset in offsets], dim=1)
+    return torch.cat([padded[context + offset : context + offset + n_words] for offset in offsets], dim=1)
 
 
 class ClassicFeatureExtractor(TextFeatureExtractor):

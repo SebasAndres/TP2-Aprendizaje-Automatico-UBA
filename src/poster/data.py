@@ -7,6 +7,7 @@ los tamaños y la ventana con que se entrenó (los splits dependen de ellos). Un
 no tiene historial por época, y no se pueden evaluar sus `classic_features` (de antes de que
 los modelos clásicos pasaran a nivel palabra, con otros atributos).
 """
+
 import json
 import logging
 from collections.abc import Callable
@@ -47,7 +48,8 @@ def latest_run(models_dir: str | Path = MODELS_DIR) -> Path:
     """La corrida más reciente: las carpetas se llaman <día>__<hora>, así que la última en
     orden alfabético es la más nueva. Solo cuenta las que tienen modelos de algún problema"""
     runs = sorted(
-        run for run in Path(models_dir).glob(f"*{RUN_SEPARATOR}*")
+        run
+        for run in Path(models_dir).glob(f"*{RUN_SEPARATOR}*")
         if any(available_models(run / problem) for problem in ("CapitalizationProblem", "PunctuationProblem"))
     )
     if not runs:
@@ -85,14 +87,16 @@ def data_sizes(config: dict[str, Any]) -> dict[str, dict[str, dict[str, int]]]:
     return {problem: data_report(load_samples(documents, size, window)) for problem, size in sizes.items()}
 
 
-def reevaluate_run(
-    run_dir: Path, capitalization_size: int, punctuation_size: int, window: WindowSpec | None
-) -> Report:
+def reevaluate_run(run_dir: Path, capitalization_size: int, punctuation_size: int, window: WindowSpec | None) -> Report:
     """Evalúa sobre test y control todos los modelos de la carpeta que se puedan cargar"""
     experiments = {experiment.name: experiment for experiment in build_experiments()}
     punctuation, capitalization = preprocess_dataset(punctuation_size, capitalization_size, window)
-    config = {"capitalization_size": capitalization_size, "punctuation_size": punctuation_size,
-              "window": vars(window) if window else None, "reevaluated": True}
+    config = {
+        "capitalization_size": capitalization_size,
+        "punctuation_size": punctuation_size,
+        "window": vars(window) if window else None,
+        "reevaluated": True,
+    }
     report: Report = {"config": config, "problems": {}}
     for dataset, problem in [(capitalization, CapitalizationProblem()), (punctuation, PunctuationProblem())]:
         development, control = split_dataset_dev_control(dataset)

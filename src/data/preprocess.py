@@ -86,6 +86,7 @@ def preprocess_dataset(
 
     return punctuation_dataset, capitalization_dataset
 
+
 def split_dataset_dev_control(dataset: Dataset) -> tuple[Dataset, Dataset]:
     """Divide el dataset en Train/Test devolviendo los Datasets"""
 
@@ -94,9 +95,7 @@ def split_dataset_dev_control(dataset: Dataset) -> tuple[Dataset, Dataset]:
     development_size = total_size - control_size
 
     development_dataset, control_dataset = random_split(
-        dataset, 
-        [development_size, control_size],
-        generator=torch.Generator().manual_seed(RANDOM_SEED)
+        dataset, [development_size, control_size], generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
     return development_dataset, control_dataset
 
@@ -105,9 +104,7 @@ def split_train_test(development_dataset: Dataset) -> tuple[Dataset, Dataset]:
     """Divide el dataset de desarrollo en train y test. Con la misma semilla, todos los
     modelos se entrenan y evalúan sobre las mismas oraciones"""
     train_dataset, test_dataset = random_split(
-        development_dataset,
-        [1 - TEST_RATIO, TEST_RATIO],
-        generator=torch.Generator().manual_seed(RANDOM_SEED)
+        development_dataset, [1 - TEST_RATIO, TEST_RATIO], generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
     return train_dataset, test_dataset
 

@@ -8,9 +8,9 @@ Puntuacion = int
 # Clases de puntuación. Las finales están ordenadas por prioridad: si una palabra termina
 # con varios signos (ej: "...?") se queda con el de mayor valor.
 NO_PUNCTUATION: Puntuacion = 0
-OPEN_QUESTION: Puntuacion = 1   # ¿
-COMMA: Puntuacion = 1           # ,
-PERIOD: Puntuacion = 2          # .
+OPEN_QUESTION: Puntuacion = 1  # ¿
+COMMA: Puntuacion = 1  # ,
+PERIOD: Puntuacion = 2  # .
 CLOSE_QUESTION: Puntuacion = 3  # ?
 
 INITIAL_LABELS = ["", "¿"]
@@ -26,15 +26,14 @@ FINAL_MARKS: dict[str, Puntuacion] = {
 
 def word_punctuation(word: str) -> tuple[Puntuacion, Puntuacion]:
     """Devuelve <PuntuacionInicial, PuntuacionFinal> según los signos en los bordes de la palabra"""
-    prefix = word[:len(word) - len(word.lstrip(PUNCTUATION_MARKS))]
-    suffix = word[len(word.rstrip(PUNCTUATION_MARKS)):]
+    prefix = word[: len(word) - len(word.lstrip(PUNCTUATION_MARKS))]
+    suffix = word[len(word.rstrip(PUNCTUATION_MARKS)) :]
     initial = OPEN_QUESTION if "¿" in prefix else NO_PUNCTUATION
     final = max((FINAL_MARKS.get(char, NO_PUNCTUATION) for char in suffix), default=NO_PUNCTUATION)
     return initial, final
 
 
 class PunctuationDataset(TextDataset):
-
     def _expected_output(self, words: list[str], word_tokens: list[list[str]]) -> torch.Tensor:
         """
         Devuelve un tensor (n_tokens, 2) con <PuntuacionInicial, PuntuacionFinal> para cada token.

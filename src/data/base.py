@@ -28,7 +28,6 @@ def collate_batch(
 
 
 class TextDataset(Dataset):
-
     def __init__(self, samples: list[list[str]]):
         """samples: cada instancia es una lista de palabras con su puntuación y capitalización
         originales (ver src/data/samples.py)"""

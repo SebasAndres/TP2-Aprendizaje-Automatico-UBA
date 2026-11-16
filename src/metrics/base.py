@@ -44,14 +44,30 @@ ClassWeights = torch.Tensor
 Ver src/training/weights.py"""
 
 
-def token_cross_entropy(logits: torch.Tensor, real: torch.Tensor, weight: torch.Tensor | None = None) -> torch.Tensor:
-    """CrossEntropy por token ignorando el padding. logits: (..., n_clases), real: (...)
-    weight: peso de cada clase (n_clases,) o None. Si tiene menos clases que los logits (tareas
-    rellenadas con clases inventadas), se completa con 1: esas clases nunca son la real"""
+def token_cross_entropy(
+    logits: torch.Tensor, real: torch.Tensor, weight: torch.Tensor | None = None
+) -> torch.Tensor:
+    """Focal Loss por token ignorando el padding. logits: (..., n_clases), real: (...)"""
     n_classes = logits.size(-1)
     if weight is not None:
         weight = F.pad(weight[:n_classes], (0, max(0, n_classes - weight.numel())), value=1.0).to(logits.device)
-    return F.cross_entropy(logits.reshape(-1, n_classes), real.reshape(-1), weight=weight, ignore_index=IGNORE_INDEX)
+    
+    # 1. Calculamos la CrossEntropy sin reducir para retener el error de cada token
+    ce_loss = F.cross_entropy(
+        logits.reshape(-1, n_classes), real.reshape(-1), 
+        weight=weight, ignore_index=IGNORE_INDEX, reduction='none'
+    )
+    
+    # 2. Extraemos la probabilidad (p_t) y aplicamos el factor de Focal Loss
+    pt = torch.exp(-ce_loss)
+    gamma = 2.0
+    focal_loss = ((1 - pt) ** gamma) * ce_loss
+    
+    # 3. Promediamos solo sobre los tokens reales (excluyendo el padding de ceros)
+    valid_mask = (real.reshape(-1) != IGNORE_INDEX)
+    if valid_mask.any():
+        return focal_loss[valid_mask].mean()
+    return torch.tensor(0.0, device=logits.device)
 
 
 def multitask_cross_entropy(

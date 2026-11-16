@@ -9,10 +9,10 @@ hiperparámetro, con todo lo demás fijo (datos, splits, semilla, épocas):
 Guarda en `models/regularization/<día>__<hora>__<param>/results.json` el historial por época
 (loss y F1 de train y test) y el F1 sobre test y control de cada valor. El archivo se
 reescribe después de cada entrenamiento, así que si Colab se corta queda lo que ya terminó.
-Los notebooks `notebooks/regularization_*.ipynb` lo corren y grafican.
+Los notebooks `regularization_*.ipynb` de esta carpeta lo corren y grafican. Se corre desde la raíz del repo:
 
-    uv run python -m src.regularization --param dropout --values 0 0.1 0.3 0.5
-    uv run python -m src.regularization --param weight_decay --values 0 1e-3 1e-2 1e-1 0.5 1
+    uv run python -m notebooks.experiments.regularization --param dropout --values 0 0.1 0.3 0.5
+    uv run python -m notebooks.experiments.regularization --param weight_decay --values 0 1e-3 1e-2 1e-1 0.5 1
 """
 
 import json
@@ -35,7 +35,7 @@ from src.training.neural import evaluate_problem_network, train_neural_model
 from src.training.result import TrainResult, format_score
 from src.metrics.base import scores_from_tasks
 
-logger = logging.getLogger("src.regularization")
+logger = logging.getLogger("src.experiments.regularization")  # bajo "src" para que salga en INFO
 
 PARAMS = ("dropout", "weight_decay")
 

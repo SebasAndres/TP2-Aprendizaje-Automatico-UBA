@@ -1,6 +1,6 @@
-"""Tablas y gráficos de los barridos de `src.regularization`, para los notebooks.
+"""Tablas y gráficos de los barridos de `regularization.py`, para los notebooks.
 
-Solo usa json y matplotlib (no importa torch ni el resto de src), así funciona en el kernel
+Solo usa json y matplotlib (no importa torch ni src), así funciona en el kernel
 de Colab aunque las dependencias del proyecto estén instaladas con uv en otro entorno.
 """
 

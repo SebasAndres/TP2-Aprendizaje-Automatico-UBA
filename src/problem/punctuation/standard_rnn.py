@@ -2,10 +2,8 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from src.constants import RANDOM_SEED
+from src.constants import EMBEDDING_DIM, HIDDEN_DIM, RANDOM_SEED
 
-EMBEDDING_DIM = 768  # tamaño de los embeddings estáticos de BERT
-HIDDEN_DIM = 128     # tamaño del estado oculto h_t (hiperparámetro)
 
 class PunctuationRNN(nn.Module):
     """

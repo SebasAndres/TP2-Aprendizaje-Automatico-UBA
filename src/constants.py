@@ -1,6 +1,10 @@
 
 EMBEDDINGS_MODEL = 'bert-base-multilingual-cased'
 
+# Dimensiones de las redes
+EMBEDDING_DIM = 768  # tamaño de los embeddings estáticos de BERT
+HIDDEN_DIM = 128     # tamaño del estado oculto h_t (hiperparámetro)
+
 # Fuentes de texto: nombre -> ruta. Cada una tiene su lector en src/data/preprocess.py
 DATASET_SOURCES = {
     "es": "datasets/es.txt.gz",

@@ -2,10 +2,8 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from src.constants import RANDOM_SEED
+from src.constants import EMBEDDING_DIM, HIDDEN_DIM, RANDOM_SEED
 
-EMBEDDING_DIM = 768
-HIDDEN_DIM = 128
 
 class PunctuationBidirectionalRNN(nn.Module):
     def __init__(

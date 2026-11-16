@@ -27,7 +27,7 @@ from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import DataLoader, Dataset
 
-from src.constants import CLASS_WEIGHT_POWER, RANDOM_SEED
+from src.constants import CLASS_WEIGHT_POWER, EMBEDDING_DIM, HIDDEN_DIM, RANDOM_SEED
 from src.data import (
     CapitalizationDataset,
     PunctuationDataset,
@@ -42,7 +42,6 @@ from src.data.samples import add_window_args, window_from_args
 from src.features import EmbeddingsExtractor
 from src.metrics import JointMetric
 from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
-from src.problem.capitalization.standard_rnn import EMBEDDING_DIM, HIDDEN_DIM
 
 logger = logging.getLogger("src.joint_rnn")
 

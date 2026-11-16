@@ -2,11 +2,9 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from src.constants import RANDOM_SEED
+from src.constants import EMBEDDING_DIM, HIDDEN_DIM, RANDOM_SEED
 from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
 
-EMBEDDING_DIM = 768
-HIDDEN_DIM = 128
 
 class CapitalizationBidirectionalRNN(nn.Module):
     def __init__(

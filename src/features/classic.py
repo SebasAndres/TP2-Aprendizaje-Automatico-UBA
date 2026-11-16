@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 
 from src.features.base import TextFeatureExtractor
-from src.words import token_word_ids
+from src.words import split_words, token_word_ids
 
 VOCALES = set("aeiouáéíóúü")
 ACENTOS = set("áéíóú")
@@ -24,18 +24,6 @@ INTERROGATIVAS = {
 }
 # Cuántas palabras de cada lado se agregan como contexto
 CONTEXT_WORDS = 2
-
-
-def split_words(tokens: list[str]) -> list[str]:
-    """Junta los tokens de cada palabra (un "##" continúa la anterior), con el mismo criterio
-    que token_word_ids. Ej: ["cu", "##ánd", "##o", "va"] -> ["cuándo", "va"]"""
-    words: list[str] = []
-    for i, token in enumerate(tokens):
-        if i > 0 and token.startswith("##"):
-            words[-1] += token.removeprefix("##")
-        else:
-            words.append(token.removeprefix("##"))
-    return words
 
 
 def _word_features(word: str, n_tokens: int) -> list[float]:

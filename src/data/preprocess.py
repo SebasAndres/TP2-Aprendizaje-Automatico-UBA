@@ -3,7 +3,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
 from src.constants import (
     BATCH_SIZE,
@@ -110,6 +110,15 @@ def split_train_test(development_dataset: Dataset) -> tuple[Dataset, Dataset]:
         generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
     return train_dataset, test_dataset
+
+
+def dataset_samples(dataset: Dataset) -> list[Sample]:
+    """Las instancias (palabras con su puntuación y capitalización originales) de un dataset,
+    en el mismo orden que dataset[i], atravesando los Subset que generan los splits"""
+    if isinstance(dataset, Subset):
+        samples = dataset_samples(dataset.dataset)
+        return [samples[i] for i in dataset.indices]
+    return dataset.samples
 
 
 def build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:

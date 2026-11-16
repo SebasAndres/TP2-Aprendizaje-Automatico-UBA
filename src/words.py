@@ -14,6 +14,18 @@ def token_word_ids(tokens: list[str]) -> np.ndarray:
     return np.cumsum([i == 0 or not token.startswith("##") for i, token in enumerate(tokens)]) - 1
 
 
+def split_words(tokens: list[str]) -> list[str]:
+    """Junta los tokens de cada palabra (un "##" continúa la anterior), con el mismo criterio
+    que token_word_ids. Ej: ["cu", "##ánd", "##o", "va"] -> ["cuándo", "va"]"""
+    words: list[str] = []
+    for i, token in enumerate(tokens):
+        if i > 0 and token.startswith("##"):
+            words[-1] += token.removeprefix("##")
+        else:
+            words.append(token.removeprefix("##"))
+    return words
+
+
 def concat_word_ids(word_ids_list: list[np.ndarray]) -> np.ndarray:
     """Concatena los índices de palabra de varias instancias sin que se repitan entre ellas.
 

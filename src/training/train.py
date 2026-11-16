@@ -17,7 +17,7 @@ from src.features import (
     TextFeatureExtractor,
 )
 from src.problem import Problem
-from src.training.classic import evaluate_classic_model, train_classic_model
+from src.training.classic import classic_trainer, evaluate_classic_model, train_classic_model
 from src.training.joint import evaluate_joint_model, joint_trainer
 from src.training.neural import Evaluator, evaluate_problem_network, neural_trainer
 from src.training.plots import save_class_metrics_plot, save_confusion_matrices, save_training_plot
@@ -43,6 +43,12 @@ def build_experiments() -> list[Experiment]:
             "classic_features", 
             train_classic_model, 
             evaluate_classic_model, 
+            ClassicFeatureExtractor()
+        ),
+        Experiment(
+            "classic_features_dictionary",
+            classic_trainer(use_dictionary=True),
+            evaluate_classic_model,
             ClassicFeatureExtractor()
         ),
         Experiment(

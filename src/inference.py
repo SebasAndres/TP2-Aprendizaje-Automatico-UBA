@@ -8,7 +8,8 @@ models/<día>__<hora>/<Problema>/<score>__<modelo> (problema → ejecución → 
 
     uv run python -m src.inference
 
-Acepta redes (.pkl, solo los pesos) y modelos clásicos (.joblib, el RandomForest entero).
+Acepta redes (.pkl, solo los pesos) y modelos clásicos (.joblib, un ClassicModel: el
+RandomForest entero y, si lo usa, el diccionario de capitalización).
 Cada modelo predice solo su problema; para reconstruir todo hay que elegir uno de cada
 problema, o la red conjunta, que predice los dos. Los modelos también se
 pueden pasar directamente, salteando el menú de modelos:
@@ -69,6 +70,7 @@ NETWORKS: dict[str, Callable[[Problem], nn.Module]] = {
 JOINT_NETWORKS = {"joint_rnn", "bidirectional_joint_rnn", "joint_lstm", "bidirectional_joint_lstm"}
 CLASSIC_EXTRACTORS: dict[str, type[TextFeatureExtractor]] = {
     "classic_features": ClassicFeatureExtractor,
+    "classic_features_dictionary": ClassicFeatureExtractor,
     "classic_embeddings": AverageEmbeddingsExtractor,
 }
 
@@ -145,8 +147,7 @@ class LoadedModel:
             features = self.extractor.extract(tokens)  # (n_tokens, n_features)
             pred = predict(self.model, features.unsqueeze(0), [len(tokens)])[0]
         else:
-            features = self.extractor.extract_words(tokens)  # (n_palabras, n_features)
-            pred = torch.as_tensor(self.model.predict(features.numpy()))[token_word_ids(tokens)]
+            pred = torch.as_tensor(self.model.predict_words(self.extractor, tokens))[token_word_ids(tokens)]
         return pred.reshape(len(tokens), -1)
 
 
@@ -298,7 +299,7 @@ def _model_choice(path: Path) -> questionary.Choice:
     """Ej: 'bidirectional_rnn    F1 0.871   red' / '... red · predice las 3 tareas'"""
     name = model_name(path)
     extra = " · predice las 3 tareas" if name in JOINT_NETWORKS else ""
-    return questionary.Choice(f"{name:<24} {run_info(path):<10} {KIND_LABELS[path.suffix]}{extra}", value=path)
+    return questionary.Choice(f"{name:<28} {run_info(path):<10} {KIND_LABELS[path.suffix]}{extra}", value=path)
 
 
 def _run_choice(folder: Path) -> questionary.Choice:

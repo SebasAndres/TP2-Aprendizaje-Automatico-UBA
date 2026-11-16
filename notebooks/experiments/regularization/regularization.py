@@ -11,8 +11,8 @@ Guarda en `models/regularization/<día>__<hora>__<param>/results.json` el histor
 reescribe después de cada entrenamiento, así que si Colab se corta queda lo que ya terminó.
 Los notebooks `regularization_*.ipynb` de esta carpeta lo corren y grafican. Se corre desde la raíz del repo:
 
-    uv run python -m notebooks.experiments.regularization --param dropout --values 0 0.1 0.3 0.5
-    uv run python -m notebooks.experiments.regularization --param weight_decay --values 0 1e-3 1e-2 1e-1 0.5 1
+    uv run python -m notebooks.experiments.regularization.regularization --param dropout --values 0 0.1 0.3 0.5
+    uv run python -m notebooks.experiments.regularization.regularization --param weight_decay --values 0 1e-3 1e-2 1e-1 0.5 1
 """
 
 import json

@@ -92,8 +92,9 @@ def _plot_precision_recall(ax: Axes, history: list[EpochMetrics], epochs: list[i
     ax.legend(frameon=False, fontsize=8, ncol=2, loc="upper left", bbox_to_anchor=(1.01, 1))
 
 
-def save_training_plot(history: list[EpochMetrics], path: Path, title: str) -> None:
-    """Guarda un PNG con la evolución de la loss y las métricas de cada época"""
+def save_training_plot(history: list[EpochMetrics], path: Path, title: str, best_epoch: int | None = None) -> None:
+    """Guarda un PNG con la evolución de la loss y las métricas de cada época. Si se indica
+    `best_epoch` (la época con la que se quedó la red), la marca con una línea punteada"""
     epochs = [m.epoch for m in history]
     tasks = list(history[0].per_class)
     fig, axes = plt.subplots(2 + len(tasks), 1, figsize=(9, 3 * (2 + len(tasks))), facecolor=SURFACE)
@@ -101,6 +102,10 @@ def save_training_plot(history: list[EpochMetrics], path: Path, title: str) -> N
     _plot_scores(axes[1], history, epochs)
     for ax, task in zip(axes[2:], tasks):
         _plot_precision_recall(ax, history, epochs, task)
+    if best_epoch is not None:
+        for ax in axes:
+            ax.axvline(best_epoch, color=TEXT_SECONDARY, linestyle=":", linewidth=1.2, zorder=0)
+        title += f" · mejor época: {best_epoch}"
     _finish(fig, title)
     fig.savefig(path, dpi=120)
     plt.close(fig)

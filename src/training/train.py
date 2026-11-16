@@ -21,7 +21,7 @@ from src.training.classic import classic_trainer, evaluate_classic_model, train_
 from src.training.joint import evaluate_joint_model, joint_trainer
 from src.training.neural import Evaluator, evaluate_problem_network, neural_trainer
 from src.training.plots import save_class_metrics_plot, save_confusion_matrices, save_training_plot
-from src.training.result import TrainResult, format_score
+from src.training.result import TrainResult, format_score, mean_score
 
 logger = logging.getLogger(__name__)
 
@@ -115,8 +115,7 @@ def _file_stem(model_dir: Path, name: str, result: TrainResult) -> Path:
     """<score>__<modelo>, con el score como el promedio del F1 macro de sus tareas.
     Así, ordenados por nombre, los mejores modelos de la ejecución quedan al final. No usar
     with_suffix sobre el resultado: tomaría el punto del score como extensión"""
-    mean_score = sum(result.score.values()) / len(result.score) if result.score else 0.0
-    return model_dir / RUN_SEPARATOR.join((f"{mean_score:.3f}", name))
+    return model_dir / RUN_SEPARATOR.join((f"{mean_score(result.score):.3f}", name))
 
 
 def _with_ext(file_stem: Path, extension: str) -> Path:
@@ -132,7 +131,8 @@ def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_na
     elif result.model is not None:
         joblib.dump(result.model, _with_ext(file_stem, ".joblib"), compress=3)
     if result.history:
-        save_training_plot(result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train y test)")
+        save_training_plot(result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train y test)",
+                           result.best_epoch)
     elif result.test_tasks:
         save_class_metrics_plot(result.per_class, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (test)")
 

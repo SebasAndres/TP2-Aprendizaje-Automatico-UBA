@@ -19,10 +19,11 @@ class EpochMetrics(NamedTuple):
 @dataclass
 class TrainResult:
     """Lo que devuelve cada trainer: el modelo, sus predicciones sobre test a nivel palabra
-    y, si entrena por épocas, las métricas de train de cada época"""
+    y, si entrena por épocas, las métricas de cada época y la época con la que se quedó"""
     model: Any
     test_tasks: dict[str, WordLevelTask] = field(default_factory=dict, repr=False)
     history: list[EpochMetrics] = field(default_factory=list, repr=False)
+    best_epoch: int | None = None
 
     @property
     def score(self) -> dict[str, float]:
@@ -37,7 +38,12 @@ class TrainResult:
     def only_tasks(self, tasks: tuple[str, ...]) -> "TrainResult":
         """El mismo resultado, pero evaluado solo en esas tareas (el historial queda completo)"""
         kept = {task: self.test_tasks[task] for task in tasks}
-        return TrainResult(self.model, kept, self.history)
+        return TrainResult(self.model, kept, self.history, self.best_epoch)
+
+
+def mean_score(score: dict[str, float]) -> float:
+    """El F1 macro de cada tarea resumido en un número: el promedio (0 si no hay tareas)"""
+    return sum(score.values()) / len(score) if score else 0.0
 
 
 def format_score(score: dict[str, float]) -> str:

@@ -17,6 +17,7 @@ Para agregar una red nueva:
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -30,7 +31,7 @@ from src.metrics import Metric
 from src.constants import CLASS_WEIGHT_POWER
 from src.metrics.base import ClassWeights, PerClass, WordLevelTask
 from src.problem import Problem
-from src.training.result import EpochMetrics, TrainResult, format_score
+from src.training.result import EpochMetrics, TrainResult, format_score, mean_score
 from src.training.weights import class_weights
 from src.words import concat_word_ids, token_word_ids
 
@@ -38,6 +39,10 @@ logger = logging.getLogger(__name__)
 
 N_EPOCHS = 5
 LEARNING_RATE = 1e-3
+# Norma máxima del gradiente en cada paso (None = sin recortar). En una RNN, backpropagation
+# through time multiplica muchas veces por W_h y el gradiente puede explotar en secuencias
+# largas; recortarlo evita que un solo batch desarme los pesos
+GRAD_CLIP_NORM: float | None = 1.0
 LOG_EVERY_N_BATCHES = 50
 
 ModelFactory = Callable[[Problem], nn.Module]
@@ -176,6 +181,8 @@ def _train_step(
     loss = metric.loss(logits, Y.to(device), weights)  # ignora el padding, pesa cada clase
     optimizer.zero_grad()  # borra los gradientes del batch anterior
     loss.backward()        # calcula los gradientes (en una RNN: backpropagation through time)
+    if GRAD_CLIP_NORM is not None:  # si la norma de todos los gradientes juntos supera el máximo, los escala
+        nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
     optimizer.step()       # actualiza todos los parámetros de la red
     return loss.item(), logits.detach().argmax(dim=-1).cpu()
 
@@ -216,6 +223,24 @@ def _train_epoch(
     return total_loss / max(n_batches, 1), log
 
 
+@dataclass
+class BestEpoch:
+    """La época con mejor F1 en test hasta el momento: sus pesos y sus predicciones sobre test"""
+    epoch: int
+    score: float
+    weights: dict[str, torch.Tensor]
+    test_log: PredictionLog
+
+
+def _update_best(best: BestEpoch | None, metrics: EpochMetrics, model: nn.Module, test_log: PredictionLog) -> BestEpoch:
+    """Si la época mejora el promedio del F1 macro en test, guarda una copia de sus pesos"""
+    score = mean_score(metrics.test_score)
+    if best is not None and score <= best.score:
+        return best
+    weights = {name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()}
+    return BestEpoch(metrics.epoch, score, weights, test_log)
+
+
 def train_neural_model(
     train_loader: DataLoader,
     test_loader: DataLoader,
@@ -227,8 +252,9 @@ def train_neural_model(
 ) -> TrainResult:
     """Entrena la red `n_epochs` épocas minimizando `metric.loss`, con cada clase pesada según
     su frecuencia en train (ver src/training/weights.py). Al final de cada época evalúa
-    sobre test (loss y F1), para ver si sobreajusta. Devuelve las predicciones sobre test de
-    la última época y las métricas de train y test de cada época"""
+    sobre test (loss y F1), para ver si sobreajusta. Se queda con los pesos de la época con
+    mejor F1 en test (no necesariamente la última) y devuelve sus predicciones sobre test y
+    las métricas de train y test de cada época"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -237,7 +263,7 @@ def train_neural_model(
 
     weights = class_weights(train_loader.dataset, class_weight_power)
 
-    history, test_log = [], PredictionLog()
+    history, best = [], None
     for epoch in range(1, n_epochs + 1):
         train_loss, train_log = _train_epoch(model, train_loader, feature_extractor, metric, optimizer, device, weights)
         test_log, test_loss = _predict_with_loss(model, test_loader, feature_extractor, metric, device, weights)
@@ -247,8 +273,11 @@ def train_neural_model(
         )
         history.append(metrics)
         _log_epoch(metrics, n_epochs)
+        best = _update_best(best, metrics, model, test_log)
 
-    return TrainResult(model.cpu(), test_log.word_level(metric), history)
+    model.load_state_dict(best.weights)
+    logger.info("Mejor época en test: %d/%d (F1 promedio %.3f)", best.epoch, n_epochs, best.score)
+    return TrainResult(model.cpu(), best.test_log.word_level(metric), history, best.epoch)
 
 
 def _log_epoch(metrics: EpochMetrics, n_epochs: int) -> None:

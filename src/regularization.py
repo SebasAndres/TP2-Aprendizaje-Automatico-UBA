@@ -12,7 +12,7 @@ reescribe después de cada entrenamiento, así que si Colab se corta queda lo qu
 Los notebooks `notebooks/regularization_*.ipynb` lo corren y grafican.
 
     uv run python -m src.regularization --param dropout --values 0 0.1 0.3 0.5
-    uv run python -m src.regularization --param weight_decay --values 0 1e-4 1e-3 1e-2 1e-1
+    uv run python -m src.regularization --param weight_decay --values 0 1e-3 1e-2 1e-1 0.5 1
 """
 
 import json
@@ -76,15 +76,17 @@ def train_one(
 ) -> dict[str, Any]:
     """Entrena la red bidireccional con `args.param = value` y devuelve sus métricas"""
     dropout = value if args.param == "dropout" else args.dropout
-    neural.WEIGHT_DECAY = value if args.param == "weight_decay" else args.weight_decay  # lo lee train_neural_model
+    weight_decay = value if args.param == "weight_decay" else args.weight_decay
     train_loader, test_loader, control_loader = loaders
-    logger.info("%s: dropout=%g weight_decay=%g", type(problem).__name__, dropout, neural.WEIGHT_DECAY)
+    logger.info("%s: dropout=%g weight_decay=%g", type(problem).__name__, dropout, weight_decay)
 
     model = problem.bidirectional_rnn_model(dropout=dropout)
-    result = train_neural_model(train_loader, test_loader, extractor, problem.metric, model, n_epochs=args.epochs)
+    result = train_neural_model(
+        train_loader, test_loader, extractor, problem.metric, model, n_epochs=args.epochs, weight_decay=weight_decay
+    )
     control = scores_from_tasks(evaluate_problem_network(result.model, control_loader, extractor, problem))
     logger.info("Control: %s", format_score(control))
-    return {"value": value, "dropout": dropout, "weight_decay": neural.WEIGHT_DECAY, **_metrics(result, control)}
+    return {"value": value, "dropout": dropout, "weight_decay": weight_decay, **_metrics(result, control)}
 
 
 def _metrics(result: TrainResult, control: dict[str, float]) -> dict[str, Any]:

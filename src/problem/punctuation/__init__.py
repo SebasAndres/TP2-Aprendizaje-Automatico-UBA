@@ -11,6 +11,9 @@ from src.problem.punctuation.standard_rnn import create_standard_rnn_model
 
 class PunctuationProblem(Problem):
     metric = PunctuationMetric()
+    # El mejor F1 en test del barrido (0.644 vs 0.638 sin decay), confirmado en control (0.652 vs 0.647).
+    # En capitalización queda en 0: con decay empeora en test (ver notebooks/regularization_weight_decay.ipynb)
+    bidirectional_rnn_weight_decay = 1.0
 
     def classic_model(self) -> RandomForestClassifier:
         return create_classic_model()

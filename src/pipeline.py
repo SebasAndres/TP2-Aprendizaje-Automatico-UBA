@@ -89,7 +89,11 @@ def run_config(args: Namespace) -> dict[str, Any]:
         "window": asdict(window) if window else None,  # None = una oración por instancia
         "n_epochs": neural.N_EPOCHS,
         "learning_rate": neural.LEARNING_RATE,
-        "weight_decay": neural.WEIGHT_DECAY,
+        "weight_decay": neural.WEIGHT_DECAY,  # el de las redes que no eligen el suyo
+        "bidirectional_rnn_weight_decay": {
+            type(problem).__name__: problem.bidirectional_rnn_weight_decay
+            for problem in (CapitalizationProblem(), PunctuationProblem())
+        },
         "grad_clip_norm": neural.GRAD_CLIP_NORM,
         "class_weight_power": CLASS_WEIGHT_POWER,
         "batch_size": BATCH_SIZE,

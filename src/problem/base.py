@@ -8,6 +8,8 @@ class Problem(ABC):
     """Define la métrica y crea modelos nuevos, sin entrenar, para cada tipo de problema"""
 
     metric: Metric
+    # Weight decay de AdamW para bidirectional_rnn, elegido en notebooks/regularization_weight_decay.ipynb
+    bidirectional_rnn_weight_decay: float = 0.0
 
     @abstractmethod
     def classic_model(self) -> Any:

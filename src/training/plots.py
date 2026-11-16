@@ -1,7 +1,8 @@
 """Gráficos que se guardan junto a los modelos.
 
-- `save_training_plot`: evolución de una red época a época. Un panel por medida (loss, F1
-  por tarea, precision/recall de cada tarea); cada panel tiene su propio eje y.
+- `save_training_plot`: evolución de una red época a época. Un panel por medida (loss y F1
+  por tarea, de train y de test; precision/recall de cada tarea sobre train); cada panel
+  tiene su propio eje y.
 - `save_class_metrics_plot`: precision/recall por clase sobre test, para modelos sin épocas.
 - `save_confusion_matrices`: una matriz por modelo y tarea, normalizada por fila.
 """
@@ -57,18 +58,26 @@ def _plot_line(ax: Axes, epochs: list[int], values: Sequence[float], color: str,
     ax.plot(epochs, values, color=color, linewidth=2, marker="o", markersize=5, **kwargs)
 
 
+def _plot_train_test(ax: Axes, epochs: list[int], train: Sequence[float], test: Sequence[float],
+                     color: str, label: str) -> None:
+    """Train con línea llena y test con línea punteada, del mismo color"""
+    _plot_line(ax, epochs, train, color, label=f"{label} · train")
+    _plot_line(ax, epochs, test, color, linestyle="--", markerfacecolor=SURFACE, label=f"{label} · test")
+
+
 def _plot_loss(ax: Axes, history: list[EpochMetrics], epochs: list[int]) -> None:
-    _plot_line(ax, epochs, [m.loss for m in history], SERIES_COLORS[0])
-    _style_axes(ax, "Loss promedio", epochs, unit_range=False)
+    _plot_train_test(ax, epochs, [m.loss for m in history], [m.test_loss for m in history],
+                     SERIES_COLORS[0], "loss")
+    _style_axes(ax, "Loss promedio: train (—) y test (--)", epochs, unit_range=False)
+    ax.legend(frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(1.01, 1))
 
 
 def _plot_scores(ax: Axes, history: list[EpochMetrics], epochs: list[int]) -> None:
-    tasks = list(history[0].score)
-    for i, task in enumerate(tasks):
-        _plot_line(ax, epochs, [m.score[task] for m in history], SERIES_COLORS[i], label=task)
-    _style_axes(ax, "F1 macro", epochs, unit_range=True)
-    if len(tasks) > 1:
-        ax.legend(frameon=False, fontsize=9)
+    for i, task in enumerate(history[0].score):
+        _plot_train_test(ax, epochs, [m.score[task] for m in history], [m.test_score[task] for m in history],
+                         SERIES_COLORS[i], task)
+    _style_axes(ax, "F1 macro: train (—) y test (--)", epochs, unit_range=True)
+    ax.legend(frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(1.01, 1))
 
 
 def _plot_precision_recall(ax: Axes, history: list[EpochMetrics], epochs: list[int], task: str) -> None:
@@ -79,7 +88,7 @@ def _plot_precision_recall(ax: Axes, history: list[EpochMetrics], epochs: list[i
         _plot_line(ax, epochs, [m.per_class[task][c][0] for m in history], color, label=f"{name} · P")
         _plot_line(ax, epochs, [m.per_class[task][c][1] for m in history], color,
                    linestyle="--", markerfacecolor=SURFACE, label=f"{name} · R")
-    _style_axes(ax, f"{task}: precision (—) y recall (--) por clase", epochs, unit_range=True)
+    _style_axes(ax, f"{task} (train): precision (—) y recall (--) por clase", epochs, unit_range=True)
     ax.legend(frameon=False, fontsize=8, ncol=2, loc="upper left", bbox_to_anchor=(1.01, 1))
 
 

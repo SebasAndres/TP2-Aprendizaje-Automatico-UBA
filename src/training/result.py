@@ -5,12 +5,15 @@ from src.metrics.base import PerClass, WordLevelTask, per_class_from_tasks, scor
 
 
 class EpochMetrics(NamedTuple):
-    """Métricas sobre train de una época: loss promedio, score del problema y
-    (precision, recall) por clase"""
+    """Métricas de una época. Sobre train: loss promedio, score del problema y
+    (precision, recall) por clase. Sobre test, con la red al final de la época: loss
+    promedio (con los mismos pesos por clase que train) y score del problema"""
     epoch: int
     loss: float
     score: dict[str, float]
     per_class: PerClass
+    test_loss: float
+    test_score: dict[str, float]
 
 
 @dataclass

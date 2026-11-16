@@ -153,8 +153,6 @@ def main() -> None:
     parser.add_argument("--bidirectional", action="store_true", help="usar una RNN bidireccional")
     parser.add_argument("--lstm", action="store_true", help="usar celdas LSTM en lugar de la RNN simple")
     parser.add_argument("--no-save", action="store_true", help="no guardar la red entrenada en models/")
-    parser.add_argument("--eval-every-epoch", action="store_true",
-                        help="loguear el score sobre test en cada época, para ver si sigue mejorando")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -167,8 +165,7 @@ def main() -> None:
     name = joint_model_name(args.bidirectional, args.lstm)
     result = train_neural_model(
         train_loader, test_loader, EmbeddingsExtractor(), JointMetric(), model,
-        n_epochs=args.epochs, class_weight_power=args.class_weight_power,
-        eval_every_epoch=args.eval_every_epoch
+        n_epochs=args.epochs, class_weight_power=args.class_weight_power
     )
     print(f"\n{name} - F1 macro sobre test: {format_score(result.score)}")
     if not args.no_save:

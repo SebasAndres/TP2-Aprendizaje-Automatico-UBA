@@ -39,16 +39,54 @@ def build_experiments() -> list[Experiment]:
     """Define las combinaciones de modelo y features que pide el enunciado"""
     embeddings = EmbeddingsExtractor()
     return [
-        Experiment("classic_features", train_classic_model, evaluate_classic_model, ClassicFeatureExtractor()),
-        Experiment("classic_embeddings", train_classic_model, evaluate_classic_model, AverageEmbeddingsExtractor()),
-        Experiment("standard_rnn", neural_trainer(lambda problem: problem.standard_rnn_model()),
-                   evaluate_problem_network, embeddings),
-        Experiment("bidirectional_rnn", neural_trainer(lambda problem: problem.bidirectional_rnn_model()),
-                   evaluate_problem_network, embeddings),
-        Experiment("joint_rnn", joint_trainer(bidirectional=False), evaluate_joint_model, embeddings),
-        Experiment("bidirectional_joint_rnn", joint_trainer(bidirectional=True), evaluate_joint_model, embeddings),
-        Experiment("joint_lstm", joint_trainer(bidirectional=False, lstm=True), evaluate_joint_model, embeddings),
-        Experiment("bidirectional_joint_lstm", joint_trainer(bidirectional=True, lstm=True), evaluate_joint_model, embeddings),
+        Experiment(
+            "classic_features", 
+            train_classic_model, 
+            evaluate_classic_model, 
+            ClassicFeatureExtractor()
+        ),
+        Experiment(
+            "classic_embeddings", 
+            train_classic_model, 
+            evaluate_classic_model, 
+            AverageEmbeddingsExtractor()
+        ),
+        Experiment(
+            "standard_rnn", 
+            neural_trainer(lambda problem: problem.standard_rnn_model()),
+            evaluate_problem_network, 
+            embeddings
+        ),
+        Experiment(
+            "bidirectional_rnn", 
+            neural_trainer(lambda problem: problem.bidirectional_rnn_model()),
+            evaluate_problem_network, 
+            embeddings
+        ),
+        Experiment(
+            "joint_rnn", 
+            joint_trainer(bidirectional=False), 
+            evaluate_joint_model, 
+            embeddings
+        ),
+        Experiment(
+            "bidirectional_joint_rnn", 
+            joint_trainer(bidirectional=True), 
+            evaluate_joint_model, 
+            embeddings
+        ),
+        Experiment(
+            "joint_lstm", 
+            joint_trainer(bidirectional=False, lstm=True), 
+            evaluate_joint_model, 
+            embeddings
+        ),
+        Experiment(
+            "bidirectional_joint_lstm", 
+            joint_trainer(bidirectional=True, lstm=True), 
+            evaluate_joint_model, 
+            embeddings
+        ),
     ]
 
 
@@ -88,7 +126,7 @@ def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_na
     elif result.model is not None:
         joblib.dump(result.model, _with_ext(file_stem, ".joblib"), compress=3)
     if result.history:
-        save_training_plot(result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train)")
+        save_training_plot(result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train y test)")
     elif result.test_tasks:
         save_class_metrics_plot(result.per_class, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (test)")
 

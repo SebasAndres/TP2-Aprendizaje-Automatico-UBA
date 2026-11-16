@@ -95,3 +95,4 @@ if __name__ == '__main__':
 
     except Exception as e:
         logger.exception(f"El pipeline falló por {e}")
+        raise  # termina con error: si no, en Colab o en un script la falla pasa desapercibida

@@ -37,6 +37,8 @@ def parse_args() -> Namespace:
                         help=f"instancias de cada fuente para capitalización (default: {CAPITALIZATION_DATASET_SIZE})")
     parser.add_argument("--punctuation-size", type=int, default=PUNCTUATION_DATASET_SIZE,
                         help=f"instancias de cada fuente para puntuación (default: {PUNCTUATION_DATASET_SIZE})")
+    parser.add_argument("--epochs", type=int, default=neural.N_EPOCHS,
+                        help=f"épocas de entrenamiento de las redes (default: {neural.N_EPOCHS})")
     parser.add_argument("--experiments", type=lambda s: s.split(","), default=None,
                         help="experimentos a entrenar, separados por coma, ej: joint_lstm,bidirectional_rnn (default: todos)")
     add_window_args(parser)
@@ -74,6 +76,7 @@ def run_config(args: Namespace) -> dict[str, Any]:
 
 if __name__ == '__main__':
     args = parse_args()
+    neural.N_EPOCHS = args.epochs  # lo leen todas las redes al entrenar, y run_config para el reporte
 
     logging.basicConfig(
         level=logging.WARNING,

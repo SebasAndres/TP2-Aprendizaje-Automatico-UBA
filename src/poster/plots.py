@@ -35,6 +35,9 @@ MODEL_LABELS = {
     "bidirectional_joint_rnn": "BiRNN conjunta",
     "joint_lstm": "LSTM conjunta",
     "bidirectional_joint_lstm": "BiLSTM conjunta",
+    "joint_projected_bigru": "Proy. + BiGRU conjunta",
+    "joint_residual_stacked_bilstm": "BiLSTM 2 capas + residual",
+    "joint_conv_bilstm": "Conv + BiLSTM conjunta",
 }
 SPLIT_LABELS = {"test": "test", "control": "control"}
 PROBLEM_LABELS = {"CapitalizationProblem": "capitalización", "PunctuationProblem": "puntuación"}

@@ -247,14 +247,16 @@ def train_neural_model(
     feature_extractor: TextFeatureExtractor,
     metric: Metric,
     model: nn.Module,
-    n_epochs: int = N_EPOCHS,
+    n_epochs: int | None = None,
     class_weight_power: float = CLASS_WEIGHT_POWER
 ) -> TrainResult:
     """Entrena la red `n_epochs` épocas minimizando `metric.loss`, con cada clase pesada según
     su frecuencia en train (ver src/training/weights.py). Al final de cada época evalúa
     sobre test (loss y F1), para ver si sobreajusta. Se queda con los pesos de la época con
     mejor F1 en test (no necesariamente la última) y devuelve sus predicciones sobre test y
-    las métricas de train y test de cada época"""
+    las métricas de train y test de cada época. Sin `n_epochs` usa N_EPOCHS (el pipeline lo
+    cambia con --epochs)"""
+    n_epochs = n_epochs or N_EPOCHS
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)

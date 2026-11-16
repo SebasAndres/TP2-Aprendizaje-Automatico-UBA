@@ -46,6 +46,11 @@ from src.features import (
     EmbeddingsExtractor,
     TextFeatureExtractor,
 )
+from src.joint_networks import (
+    create_conv_bilstm_model,
+    create_projected_bigru_model,
+    create_residual_stacked_bilstm_model,
+)
 from src.joint_rnn import create_joint_lstm_model, create_joint_rnn_model
 from src.metrics.base import class_name
 from src.problem import CapitalizationProblem, Problem, PunctuationProblem
@@ -65,9 +70,15 @@ NETWORKS: dict[str, Callable[[Problem], nn.Module]] = {
     "bidirectional_joint_rnn": lambda _: create_joint_rnn_model(bidirectional=True),
     "joint_lstm": lambda _: create_joint_lstm_model(),
     "bidirectional_joint_lstm": lambda _: create_joint_lstm_model(bidirectional=True),
+    "joint_projected_bigru": lambda _: create_projected_bigru_model(),
+    "joint_residual_stacked_bilstm": lambda _: create_residual_stacked_bilstm_model(),
+    "joint_conv_bilstm": lambda _: create_conv_bilstm_model(),
 }
 # Redes que predicen las 3 tareas a la vez
-JOINT_NETWORKS = {"joint_rnn", "bidirectional_joint_rnn", "joint_lstm", "bidirectional_joint_lstm"}
+JOINT_NETWORKS = {
+    "joint_rnn", "bidirectional_joint_rnn", "joint_lstm", "bidirectional_joint_lstm",
+    "joint_projected_bigru", "joint_residual_stacked_bilstm", "joint_conv_bilstm",
+}
 CLASSIC_EXTRACTORS: dict[str, type[TextFeatureExtractor]] = {
     "classic_features": ClassicFeatureExtractor,
     "classic_features_dictionary": ClassicFeatureExtractor,

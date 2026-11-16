@@ -18,6 +18,12 @@ from src.features import (
 )
 from src.problem import Problem
 from src.training.classic import classic_trainer, evaluate_classic_model, train_classic_model
+from src.joint_networks import (
+    create_conv_bilstm_model,
+    create_projected_bigru_model,
+    create_residual_stacked_bilstm_model,
+)
+from src.joint_rnn import create_joint_model
 from src.training.joint import evaluate_joint_model, joint_trainer
 from src.training.neural import Evaluator, evaluate_problem_network, neural_trainer
 from src.training.plots import save_class_metrics_plot, save_confusion_matrices, save_training_plot
@@ -71,26 +77,45 @@ def build_experiments() -> list[Experiment]:
         ),
         Experiment(
             "joint_rnn", 
-            joint_trainer(bidirectional=False), 
+            joint_trainer(lambda: create_joint_model(bidirectional=False)),
             evaluate_joint_model, 
             embeddings
         ),
         Experiment(
             "bidirectional_joint_rnn", 
-            joint_trainer(bidirectional=True), 
+            joint_trainer(lambda: create_joint_model(bidirectional=True)),
             evaluate_joint_model, 
             embeddings
         ),
         Experiment(
             "joint_lstm", 
-            joint_trainer(bidirectional=False, lstm=True), 
+            joint_trainer(lambda: create_joint_model(bidirectional=False, lstm=True)),
             evaluate_joint_model, 
             embeddings
         ),
         Experiment(
             "bidirectional_joint_lstm", 
-            joint_trainer(bidirectional=True, lstm=True), 
+            joint_trainer(lambda: create_joint_model(bidirectional=True, lstm=True)),
             evaluate_joint_model, 
+            embeddings
+        ),
+        # Variantes de la red conjunta, ver src/joint_networks.py
+        Experiment(
+            "joint_projected_bigru",
+            joint_trainer(create_projected_bigru_model),
+            evaluate_joint_model,
+            embeddings
+        ),
+        Experiment(
+            "joint_residual_stacked_bilstm",
+            joint_trainer(create_residual_stacked_bilstm_model),
+            evaluate_joint_model,
+            embeddings
+        ),
+        Experiment(
+            "joint_conv_bilstm",
+            joint_trainer(create_conv_bilstm_model),
+            evaluate_joint_model,
             embeddings
         ),
     ]

@@ -1,17 +1,19 @@
-"""Experimentos conjuntos (`joint_rnn`, `bidirectional_joint_rnn`, `joint_lstm`,
-`bidirectional_joint_lstm`): una red recurrente que aprende capitalización y puntuación a la vez.
+"""Experimentos conjuntos (`joint_rnn`, `bidirectional_joint_lstm`, las variantes de
+src/joint_networks.py, etc.): una red que aprende capitalización y puntuación a la vez.
 
 Las demás redes se entrenan solo con las etiquetas del problema. Esta necesita las 3
 etiquetas de cada token, así que se arma un `JointDataset` con las mismas oraciones y se le
 aplican exactamente los mismos splits (desarrollo/control y train/test) que al dataset del
 problema. Después se evalúan solo las cabezas del problema, para compararla con el resto.
 """
+from collections.abc import Callable
+
 from torch import nn
 from torch.utils.data import DataLoader, Dataset, Subset
 
 from src.data import build_loader
 from src.features import TextFeatureExtractor
-from src.joint_rnn import JointDataset, create_joint_model
+from src.joint_rnn import JointDataset
 from src.metrics import JointMetric
 from src.metrics.base import WordLevelTask
 from src.problem import Problem
@@ -48,30 +50,31 @@ def train_joint_model(
     test_loader: DataLoader,
     feature_extractor: TextFeatureExtractor,
     problem: Problem,
-    bidirectional: bool = False,
-    lstm: bool = False
+    build_model: Callable[[], nn.Module]
 ) -> TrainResult:
-    """Entrena la red conjunta (RNN o LSTM) con las 3 tareas y la evalúa solo en las tareas del problema"""
+    """Entrena la red conjunta que crea `build_model` con las 3 tareas y la evalúa solo en las
+    tareas del problema"""
     joint_dataset = _joint_dataset(train_loader)
     result = train_neural_model(
         _joint_loader(train_loader, joint_dataset, shuffle=True),
         _joint_loader(test_loader, joint_dataset, shuffle=False),
         feature_extractor,
         JointMetric(),
-        create_joint_model(bidirectional, lstm)
+        build_model()
     )
     return result.only_tasks(problem.metric.tasks)
 
 
-def joint_trainer(bidirectional: bool, lstm: bool = False) -> Trainer:
-    """`train_joint_model` con la firma de `Experiment.trainer`, fijando la dirección y el tipo de celda"""
+def joint_trainer(build_model: Callable[[], nn.Module]) -> Trainer:
+    """`train_joint_model` con la firma de `Experiment.trainer`, fijando qué red conjunta entrenar.
+    `build_model` crea la red sin entrenar, con salida (batch, n_tokens, 3, 4) como JointRNN"""
     def trainer(
         train_loader: DataLoader,
         test_loader: DataLoader,
         feature_extractor: TextFeatureExtractor,
         problem: Problem
     ) -> TrainResult:
-        return train_joint_model(train_loader, test_loader, feature_extractor, problem, bidirectional, lstm)
+        return train_joint_model(train_loader, test_loader, feature_extractor, problem, build_model)
     return trainer
 
 

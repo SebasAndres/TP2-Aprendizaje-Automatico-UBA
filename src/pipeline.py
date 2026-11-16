@@ -39,60 +39,55 @@ if __name__ == '__main__':
     )
     logging.getLogger("src").setLevel(logging.INFO)
 
-    try:
-        logger.info("Cargando experimentos")
-        experiments = build_experiments()
+    logger.info("Cargando experimentos")
+    experiments = build_experiments()
 
-        # Genera las instancias de torch.util.data.Dataset en base a el/los
-        # datasets descargados en local
-        logger.info("Preprocesando datasets")
-        (
-            punctuation_dataset,
-            capitalization_dataset
-        ) = preprocess_dataset(args.punctuation_size, args.capitalization_size, window_from_args(args))
+    # Genera las instancias de torch.util.data.Dataset en base a el/los
+    # datasets descargados en local
+    logger.info("Preprocesando datasets")
+    (
+        punctuation_dataset,
+        capitalization_dataset
+    ) = preprocess_dataset(args.punctuation_size, args.capitalization_size, window_from_args(args))
 
-        # Todo lo que guarda esta ejecución va a su propia carpeta: models/<día>__<hora>/
-        run_dir = create_run_directory()
-        logger.info("Guardando modelos en %s", run_dir)
+    # Todo lo que guarda esta ejecución va a su propia carpeta: models/<día>__<hora>/
+    run_dir = create_run_directory()
+    logger.info("Guardando modelos en %s", run_dir)
 
-        # Para cada problema
-        # obs: podría ser paralelo, no creo alcance la RAM
-        for dataset, problem in [
-            (capitalization_dataset, CapitalizationProblem()),
-            (punctuation_dataset, PunctuationProblem())
-        ]:
-            logger.info("Problema: %s (%d instancias)", type(problem).__name__, len(dataset))
+    # Para cada problema
+    # obs: podría ser paralelo, no creo alcance la RAM
+    for dataset, problem in [
+        (capitalization_dataset, CapitalizationProblem()),
+        (punctuation_dataset, PunctuationProblem())
+    ]:
+        logger.info("Problema: %s (%d instancias)", type(problem).__name__, len(dataset))
 
-            development_set, control_set = split_dataset_dev_control(dataset)
-            logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
+        development_set, control_set = split_dataset_dev_control(dataset)
+        logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
 
-            model_dir = problem_dir(run_dir, problem)
-            experiment_results = train_models(development_set, experiments, problem, model_dir)
+        model_dir = problem_dir(run_dir, problem)
+        experiment_results = train_models(development_set, experiments, problem, model_dir)
 
-            # Elegimos el modelo ganador
-            winning_experiment = max(
-                experiment_results,
-                key=lambda name: overall_score(experiment_results[name].score)
-            )
-            logger.info(
-                "Ganador en test: %s (%s)",
-                winning_experiment, format_score(experiment_results[winning_experiment].score)
-            )
+        # Elegimos el modelo ganador
+        winning_experiment = max(
+            experiment_results,
+            key=lambda name: overall_score(experiment_results[name].score)
+        )
+        logger.info(
+            "Ganador en test: %s (%s)",
+            winning_experiment, format_score(experiment_results[winning_experiment].score)
+        )
 
-            # Evaluamos performance sobre control para report
-            logger.info("Evaluando %s sobre control", winning_experiment)
-            experiment = next(e for e in experiments if e.name == winning_experiment)
-            control_result = evaluate_on_control(
-                control_set, experiment, experiment_results[winning_experiment], problem, model_dir
-            )
-            logger.info(
-                "Ganador en control: %s (%s)",
-                winning_experiment, format_score(control_result.score)
-            )
+        # Evaluamos performance sobre control para report
+        logger.info("Evaluando %s sobre control", winning_experiment)
+        experiment = next(e for e in experiments if e.name == winning_experiment)
+        control_result = evaluate_on_control(
+            control_set, experiment, experiment_results[winning_experiment], problem, model_dir
+        )
+        logger.info(
+            "Ganador en control: %s (%s)",
+            winning_experiment, format_score(control_result.score)
+        )
 
 
-        logger.info("Pipeline finalizado")
-
-    except Exception as e:
-        logger.exception(f"El pipeline falló por {e}")
-        raise  # termina con error: si no, en Colab o en un script la falla pasa desapercibida
+    logger.info("Pipeline finalizado")

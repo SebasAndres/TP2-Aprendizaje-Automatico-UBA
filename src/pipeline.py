@@ -1,10 +1,21 @@
 import logging
 from argparse import ArgumentParser, Namespace
+from dataclasses import asdict
+from typing import Any
 
-from src.constants import CAPITALIZATION_DATASET_SIZE, PUNCTUATION_DATASET_SIZE
+from src.constants import (
+    BATCH_SIZE,
+    CAPITALIZATION_DATASET_SIZE,
+    CLASS_WEIGHT_POWER,
+    HIDDEN_DIM,
+    PUNCTUATION_DATASET_SIZE,
+    RANDOM_SEED,
+)
 from src.data import preprocess_dataset, split_dataset_dev_control
 from src.data.samples import add_window_args, window_from_args
 from src.training import build_experiments, evaluate_on_control, create_run_directory, problem_dir, train_models
+from src.training import neural
+from src.training.report import experiment_report, save_report
 from src.training.result import format_score
 from src.problem import CapitalizationProblem, PunctuationProblem
 
@@ -30,6 +41,23 @@ def parse_args() -> Namespace:
     return parser.parse_args()
 
 
+def run_config(args: Namespace) -> dict[str, Any]:
+    """Con qué datos e hiperparámetros se entrenó la corrida, para el reporte"""
+    window = window_from_args(args)
+    return {
+        "capitalization_size": args.capitalization_size,
+        "punctuation_size": args.punctuation_size,
+        "window": asdict(window) if window else None,  # None = una oración por instancia
+        "n_epochs": neural.N_EPOCHS,
+        "learning_rate": neural.LEARNING_RATE,
+        "grad_clip_norm": neural.GRAD_CLIP_NORM,
+        "class_weight_power": CLASS_WEIGHT_POWER,
+        "batch_size": BATCH_SIZE,
+        "hidden_dim": HIDDEN_DIM,
+        "random_seed": RANDOM_SEED,
+    }
+
+
 if __name__ == '__main__':
     args = parse_args()
 
@@ -53,6 +81,7 @@ if __name__ == '__main__':
     # Todo lo que guarda esta ejecución va a su propia carpeta: models/<día>__<hora>/
     run_dir = create_run_directory()
     logger.info("Guardando modelos en %s", run_dir)
+    report: dict[str, Any] = {"config": run_config(args), "problems": {}}
 
     # Para cada problema
     # obs: podría ser paralelo, no creo alcance la RAM
@@ -78,16 +107,25 @@ if __name__ == '__main__':
             winning_experiment, format_score(experiment_results[winning_experiment].score)
         )
 
-        # Evaluamos performance sobre control para report
-        logger.info("Evaluando %s sobre control", winning_experiment)
-        experiment = next(e for e in experiments if e.name == winning_experiment)
-        control_result = evaluate_on_control(
-            control_set, experiment, experiment_results[winning_experiment], problem, model_dir
-        )
+        # Evaluamos todos los modelos sobre control: es el número honesto para comparar, porque
+        # test ya se usó para elegir la época de cada red y el ganador
+        control_results = {}
+        for experiment in experiments:
+            if experiment_results[experiment.name].model is None:  # red sin implementar
+                continue
+            logger.info("Evaluando %s sobre control", experiment.name)
+            control_results[experiment.name] = evaluate_on_control(
+                control_set, experiment, experiment_results[experiment.name], problem, model_dir
+            )
         logger.info(
             "Ganador en control: %s (%s)",
-            winning_experiment, format_score(control_result.score)
+            winning_experiment, format_score(control_results[winning_experiment].score)
         )
 
+        report["problems"][type(problem).__name__] = {
+            name: experiment_report(result, control_results.get(name))
+            for name, result in experiment_results.items()
+        }
+        logger.info("Métricas guardadas en %s", save_report(run_dir, report))
 
     logger.info("Pipeline finalizado")

@@ -108,7 +108,7 @@ def _extractor(extractor_class: type[TextFeatureExtractor]) -> TextFeatureExtrac
     return extractor_class()
 
 
-def _load(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextFeatureExtractor]]:
+def load_model(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextFeatureExtractor]]:
     """Devuelve el modelo listo para predecir y el extractor con el que se entrenó"""
     if path.suffix == ".joblib" and name in CLASSIC_EXTRACTORS:
         return joblib.load(path), CLASSIC_EXTRACTORS[name]
@@ -133,7 +133,7 @@ class LoadedModel:
         self.problem_name = problem_name
         self.name = f"{run_of(path.parent)}/{problem_name}/{path.stem}"
         self.is_joint = name in JOINT_NETWORKS
-        self.model, extractor_class = _load(path, problem, name)
+        self.model, extractor_class = load_model(path, problem, name)
         self.extractor = _extractor(extractor_class)
 
     def predict(self, tokens: list[str]) -> torch.Tensor:

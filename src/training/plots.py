@@ -138,9 +138,18 @@ def save_class_metrics_plot(per_class: PerClass, path: Path, title: str) -> None
 
 
 def _plot_confusion(ax: Axes, title: str, task: str, real: np.ndarray, pred: np.ndarray, n_classes: int) -> None:
+    plot_confusion_counts(ax, title, task, confusion_matrix(real, pred, labels=range(n_classes)))
+
+
+def plot_confusion_counts(
+    ax: Axes, title: str, task: str, counts: np.ndarray, names: list[str] | None = None
+) -> None:
     """Matriz normalizada por fila: cada fila muestra a dónde fueron las palabras de esa clase
-    real (la diagonal es el recall). Cada celda indica el porcentaje y la cantidad"""
-    counts = confusion_matrix(real, pred, labels=range(n_classes))
+    real (la diagonal es el recall). Cada celda indica el porcentaje y la cantidad.
+    counts: (n_clases, n_clases), fila = clase real, columna = clase predicha
+    names: nombre de cada clase (por defecto, los de class_name)"""
+    counts = np.asarray(counts)
+    n_classes = len(counts)
     rates = counts / np.maximum(counts.sum(axis=1, keepdims=True), 1)
     ax.imshow(rates, cmap=SEQUENTIAL, vmin=0, vmax=1)
     # Separación de 2px del color de fondo entre celdas
@@ -152,7 +161,7 @@ def _plot_confusion(ax: Axes, title: str, task: str, real: np.ndarray, pred: np.
         for j in range(n_classes):
             color = SURFACE if rates[i, j] > 0.55 else TEXT_PRIMARY
             ax.text(j, i, f"{rates[i, j]:.0%}\n{counts[i, j]}", ha="center", va="center", fontsize=8, color=color)
-    names = [class_name(task, c) for c in range(n_classes)]
+    names = names or [class_name(task, c) for c in range(n_classes)]
     ax.set_xticks(range(n_classes), names, fontsize=8, color=TEXT_SECONDARY)
     ax.set_yticks(range(n_classes), names, fontsize=8, color=TEXT_SECONDARY)
     ax.set_xlabel("predicha", color=TEXT_SECONDARY, fontsize=9)

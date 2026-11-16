@@ -43,7 +43,7 @@ LEARNING_RATE = 1e-3
 # aparte del paso de Adam. Con Adam(weight_decay=...) el término L2 pasaría por la escala
 # adaptativa y los pesos con gradientes grandes casi no se regularizarían.
 # 0 = igual a Adam. Es el valor de las redes que no eligen el suyo (ver neural_trainer); el de
-# bidirectional_rnn sale de notebooks/experiments/regularization/regularization_weight_decay.ipynb
+# bidirectional_rnn sale de notebooks/hyperparameters/regularization/regularization_weight_decay.ipynb
 WEIGHT_DECAY = 0.0
 # Norma máxima del gradiente en cada paso (None = sin recortar). En una RNN, backpropagation
 # through time multiplica muchas veces por W_h y el gradiente puede explotar en secuencias

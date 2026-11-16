@@ -246,6 +246,22 @@ def _update_best(best: BestEpoch | None, metrics: EpochMetrics, model: nn.Module
     return BestEpoch(metrics.epoch, score, weights, test_log)
 
 
+def _optimizer(model: nn.Module, learning_rate: float | None, weight_decay: float | None) -> torch.optim.Optimizer:
+    """AdamW con el learning rate y el weight decay pedidos (None = los valores por defecto)"""
+    learning_rate = LEARNING_RATE if learning_rate is None else learning_rate
+    weight_decay = WEIGHT_DECAY if weight_decay is None else weight_decay
+    n_params = sum(p.numel() for p in model.parameters())
+    logger.info(
+        "Entrenando %s en %s (%d parámetros, lr=%g, weight_decay=%g)",
+        type(model).__name__,
+        next(model.parameters()).device,
+        n_params,
+        learning_rate,
+        weight_decay,
+    )
+    return torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
+
 def train_neural_model(
     train_loader: DataLoader,
     test_loader: DataLoader,
@@ -255,23 +271,18 @@ def train_neural_model(
     n_epochs: int | None = None,
     class_weight_power: float = CLASS_WEIGHT_POWER,
     weight_decay: float | None = None,
+    learning_rate: float | None = None,
 ) -> TrainResult:
     """Entrena la red `n_epochs` épocas minimizando `metric.loss`, con cada clase pesada según
     su frecuencia en train (ver src/training/weights.py). Al final de cada época evalúa
     sobre test (loss y F1), para ver si sobreajusta. Se queda con los pesos de la época con
     mejor F1 en test (no necesariamente la última) y devuelve sus predicciones sobre test y
     las métricas de train y test de cada época. Sin `n_epochs` usa N_EPOCHS (el pipeline lo
-    cambia con --epochs) y sin `weight_decay`, WEIGHT_DECAY"""
+    cambia con --epochs), sin `weight_decay` WEIGHT_DECAY y sin `learning_rate` LEARNING_RATE"""
     n_epochs = n_epochs or N_EPOCHS
-    weight_decay = WEIGHT_DECAY if weight_decay is None else weight_decay
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=weight_decay)
-    n_params = sum(p.numel() for p in model.parameters())
-    logger.info(
-        "Entrenando %s en %s (%d parámetros, weight_decay=%g)", type(model).__name__, device, n_params, weight_decay
-    )
-
+    optimizer = _optimizer(model, learning_rate, weight_decay)
     weights = class_weights(train_loader.dataset, class_weight_power)
 
     history, best = [], None

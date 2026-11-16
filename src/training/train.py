@@ -90,7 +90,7 @@ def build_experiments() -> list[Experiment]:
     ]
 
 
-def new_run_dir() -> Path:
+def create_run_directory() -> Path:
     """Carpeta propia de esta ejecución del pipeline: models/<día>__<hora>.
     Ej: 'models/2026-11-12__19-30-05'. Adentro, una carpeta por problema"""
     run_dir = Path(MODELS_DIR) / datetime.now().strftime(f"%Y-%m-%d{RUN_SEPARATOR}%H-%M-%S")

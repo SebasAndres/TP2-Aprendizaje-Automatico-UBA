@@ -4,7 +4,7 @@ from argparse import ArgumentParser, Namespace
 from src.constants import CAPITALIZATION_DATASET_SIZE, PUNCTUATION_DATASET_SIZE
 from src.data import preprocess_dataset, split_dataset_dev_control
 from src.data.samples import add_window_args, window_from_args
-from src.training import build_experiments, evaluate_on_control, new_run_dir, problem_dir, train_models
+from src.training import build_experiments, evaluate_on_control, create_run_directory, problem_dir, train_models
 from src.training.result import format_score
 from src.problem import CapitalizationProblem, PunctuationProblem
 
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         ) = preprocess_dataset(args.punctuation_size, args.capitalization_size, window_from_args(args))
 
         # Todo lo que guarda esta ejecución va a su propia carpeta: models/<día>__<hora>/
-        run_dir = new_run_dir()
+        run_dir = create_run_directory()
         logger.info("Guardando modelos en %s", run_dir)
 
         # Para cada problema

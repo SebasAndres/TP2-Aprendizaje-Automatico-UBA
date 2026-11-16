@@ -302,9 +302,9 @@ def save_joint_result(result, name: str) -> None:
     una copia por problema con el score de sus tareas. Así src.inference la encuentra al elegir
     cualquiera de los dos problemas, y como es conjunta predice los dos"""
     from src.problem import CapitalizationProblem, PunctuationProblem
-    from src.training.train import _file_stem, _save_experiment, new_run_dir, problem_dir
+    from src.training.train import _file_stem, _save_experiment, create_run_directory, problem_dir
 
-    run_dir = new_run_dir()
+    run_dir = create_run_directory()
     for problem in (CapitalizationProblem(), PunctuationProblem()):
         problem_result = result.only_tasks(problem.metric.tasks)
         model_dir = problem_dir(run_dir, problem)

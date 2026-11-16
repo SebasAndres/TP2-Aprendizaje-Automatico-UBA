@@ -9,10 +9,13 @@ from src.words import first_token_mask, majority_by_word
 class CapitalizationMetric(Metric):
     tasks = ("capitalizacion",)
 
+    def word_labels(self, labels: np.ndarray, word_ids: np.ndarray) -> np.ndarray:
+        """Todos los tokens de una palabra comparten la etiqueta real: la del primero"""
+        return labels[first_token_mask(word_ids)]
+
     def word_level(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> dict[str, WordLevelTask]:
-        """Todos los tokens de una palabra comparten la etiqueta real,
-        y la predicción de la palabra es la más votada entre sus tokens"""
-        word_real = real[first_token_mask(word_ids)]
+        """La predicción de la palabra es la más votada entre sus tokens"""
+        word_real = self.word_labels(real, word_ids)
         word_pred = majority_by_word(pred, word_ids)
         return {"capitalizacion": (word_real, word_pred, N_CAPITALIZATION_CLASSES)}
 

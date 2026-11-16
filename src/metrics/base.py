@@ -90,6 +90,13 @@ class Metric(ABC):
     """Nombres de las tareas que evalúa, en el orden en que las devuelve `word_level`"""
 
     @abstractmethod
+    def word_labels(self, labels: np.ndarray, word_ids: np.ndarray) -> np.ndarray:
+        """Pasa las etiquetas reales por token a una por palabra, tomándolas del token donde
+        las asigna el dataset. -> (n_palabras,) o (n_palabras, n_columnas). Los modelos
+        clásicos se entrenan con estas etiquetas"""
+        raise NotImplementedError
+
+    @abstractmethod
     def word_level(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> dict[str, WordLevelTask]:
         """Pasa las clases por token (sin padding) a nivel palabra, separadas por tarea.
         word_ids indica la palabra de cada token"""

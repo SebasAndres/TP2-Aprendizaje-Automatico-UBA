@@ -49,7 +49,7 @@ from src.joint_rnn import create_joint_lstm_model, create_joint_rnn_model
 from src.metrics.base import class_name
 from src.problem import CapitalizationProblem, Problem, PunctuationProblem
 from src.training.neural import predict
-from src.words import first_token_mask, last_token_mask, majority_by_word
+from src.words import first_token_mask, last_token_mask, majority_by_word, token_word_ids
 
 PROBLEMS: dict[str, Problem] = {
     "CapitalizationProblem": CapitalizationProblem(),
@@ -139,12 +139,14 @@ class LoadedModel:
         - capitalización:   [capitalización]
         - puntuación:       [inicial, final]
         - red conjunta:     [capitalización, inicial, final]
-        Así la capitalización siempre es la primera columna y la puntuación las dos últimas"""
-        features = self.extractor.extract(tokens)  # (n_tokens, n_features)
+        Así la capitalización siempre es la primera columna y la puntuación las dos últimas.
+        Los modelos clásicos predicen por palabra: cada token recibe la clase de su palabra"""
         if isinstance(self.model, nn.Module):
+            features = self.extractor.extract(tokens)  # (n_tokens, n_features)
             pred = predict(self.model, features.unsqueeze(0), [len(tokens)])[0]
         else:
-            pred = torch.as_tensor(self.model.predict(features.numpy()))
+            features = self.extractor.extract_words(tokens)  # (n_palabras, n_features)
+            pred = torch.as_tensor(self.model.predict(features.numpy()))[token_word_ids(tokens)]
         return pred.reshape(len(tokens), -1)
 
 

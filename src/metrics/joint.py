@@ -14,6 +14,12 @@ class JointMetric(Metric):
     punctuation = PunctuationMetric()
     tasks = capitalization.tasks + punctuation.tasks
 
+    def word_labels(self, labels: np.ndarray, word_ids: np.ndarray) -> np.ndarray:
+        """[capitalización, inicial, final] de cada palabra. -> (n_palabras, 3)"""
+        capitalization = self.capitalization.word_labels(labels[:, 0], word_ids)
+        punctuation = self.punctuation.word_labels(labels[:, 1:], word_ids)
+        return np.column_stack([capitalization, punctuation])
+
     def word_level(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> dict[str, WordLevelTask]:
         """La columna 0 se evalúa como capitalización y las columnas 1 y 2 como puntuación"""
         return {

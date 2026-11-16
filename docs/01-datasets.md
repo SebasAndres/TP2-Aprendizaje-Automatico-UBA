@@ -1,7 +1,7 @@
 # Datasets
 
 De dónde salen las instancias con las que se entrenan y evalúan todos los modelos. Qué
-features y etiquetas se sacan de ellas: [features_and_expected_output.md](features_and_expected_output.md).
+features y etiquetas se sacan de ellas: [02-features_and_expected_output.md](02-features_and_expected_output.md).
 
 ## De texto a instancias
 

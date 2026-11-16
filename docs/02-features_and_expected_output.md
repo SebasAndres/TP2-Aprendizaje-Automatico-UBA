@@ -1,7 +1,7 @@
 # Features y salida esperada
 
-Qué recibe cada modelo (las features de cada instancia de [datasets.md](datasets.md)) y qué
-tiene que aprender a devolver (las etiquetas). Los modelos que los usan: [models.md](models.md).
+Qué recibe cada modelo (las features de cada instancia de [01-datasets.md](01-datasets.md)) y qué
+tiene que aprender a devolver (las etiquetas). Los modelos que los usan: [03-models.md](03-models.md).
 
 ## Feature extractors
 

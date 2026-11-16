@@ -1,8 +1,8 @@
 # Modelos
 
-Los modelos de cada experimento (ver la tabla de [intro.md](intro.md)): su entrada y salida,
-con qué loss se entrenan y con qué métrica se evalúan. Las features y etiquetas que reciben
-están en [features_and_expected_output.md](features_and_expected_output.md).
+Los modelos de cada experimento (ver la tabla de [00-intro.md](00-intro.md)): su entrada y salida
+y cómo se entrenan. La loss y la métrica están en [04-metrics.md](04-metrics.md). Las features y etiquetas que reciben
+están en [02-features_and_expected_output.md](02-features_and_expected_output.md).
 
 ## Clásicos (RandomForest)
 
@@ -80,9 +80,14 @@ con $C_k$ las clases de la tarea (4, 2 o 4).
 | `bidirectional_joint_rnn` | `JointRNN` | `nn.RNN(768, 128, bidirectional)` | ídem | `(B, T, 3, 4)` | 232 K |
 | `joint_lstm` | `JointLSTM` | `nn.LSTM(768, 128)` | ídem | `(B, T, 3, 4)` | 461 K |
 | `bidirectional_joint_lstm` | `JointLSTM` | `nn.LSTM(768, 128, bidirectional)` | ídem | `(B, T, 3, 4)` | 922 K |
+| `joint_projected_bigru` | `ProjectedBiGRU` | lineal 768 → 256 + GELU, `nn.GRU(256, 128, bidirectional)` | 3 MLP (256 → 128 → clases, GELU) | `(B, T, 3, 4)` | 593 K |
+| `joint_residual_stacked_bilstm` | `ResidualStackedBiLSTM` | lineal 768 → 256 + GELU, `nn.LSTM(256, 128, 2 capas, bidirectional)` | 3 lineales sobre `[h_t ; token proyectado]` | `(B, T, 3, 4)` | 993 K |
+| `joint_conv_bilstm` | `ConvBiLSTM` | `Conv1d(768, 256, ventana 3)` + GELU, `nn.LSTM(256, 128, bidirectional)` | 3 lineales | `(B, T, 3, 4)` | 988 K |
 
 - Las redes de cada problema están en [`src/problem/<problema>/`](../src/problem/); las
-  conjuntas en [`src/joint_rnn.py`](../src/joint_rnn.py).
+  conjuntas en [`src/joint_rnn.py`](../src/joint_rnn.py), y sus variantes (las últimas tres
+  filas, con dropout 0.3) en [`src/joint_networks.py`](../src/joint_networks.py), que explica
+  qué prueba cada una.
 - **Varias tareas en un tensor**: las tareas con menos clases se completan con logits `-inf`
   hasta 4 clases. Como $e^{-\infty} = 0$, en el softmax
   $P(c) = e^{z_c} / \sum_{c'} e^{z_{c'}}$ esas clases inventadas tienen probabilidad 0: nunca se predicen ni cambian la
@@ -92,80 +97,17 @@ con $C_k$ las clases de la tarea (4, 2 o 4).
   y para cada problema se evalúan solo sus cabezas. Sirven para responder si conviene compartir
   pesos entre tareas.
 
-## Loss
+## Entrenamiento de las redes
 
-Solo las redes ([`src/metrics/base.py`](../src/metrics/base.py)):
-
-| Problema | Loss |
-|---|---|
-| Capitalización | `CrossEntropy(logits, y)` por token |
-| Puntuación | `CrossEntropy(inicial) + CrossEntropy(final)` |
-| Conjunta | `CrossEntropy(capitalización) + CrossEntropy(inicial) + CrossEntropy(final)` |
-
-La CrossEntropy de la tarea $k$ en un batch, sobre los tokens $t$ que no son padding, con
-$y_t$ la clase real y $w_c$ el peso de la clase $c$:
-
-$$\mathcal{L}_k = -\frac{\sum_t w_{y_t} \log \mathrm{softmax}\big(z^{(k)}_t\big)_{y_t}}{\sum_t w_{y_t}}$$
-
-(es el promedio pesado que calcula `F.cross_entropy` con `weight`). La loss de una red es la
-suma sobre sus tareas: $\mathcal{L} = \sum_k \mathcal{L}_k$.
-
-- El padding (`-100`) se ignora (`ignore_index`).
-- **Pesos por clase** ([`src/training/weights.py`](../src/training/weights.py)): la mayoría de
-  los tokens no lleva signo ni mayúscula, así que equivocarse en una clase rara cuesta más. El
-  peso de la clase $c$ de cada tarea es $w_c = \left(\frac{N}{K \cdot n_c}\right)^{p}$ con
-  $p$ = `CLASS_WEIGHT_POWER`, calculado sobre
-  train, con `N` los tokens de la tarea, `K` las clases presentes y `n_c` los tokens de la
-  clase. Con `CLASS_WEIGHT_POWER = 0.5` (default) es la raíz del balanceo completo.
-- La loss es **por token**, aunque la métrica sea por palabra: en capitalización todos los
-  tokens de la palabra tienen la etiqueta; en puntuación, los tokens del medio de una palabra
-  aprenden "nada".
-
-### Entrenamiento de las redes
+Minimizan la loss de [04-metrics.md](04-metrics.md), con estos parámetros.
 
 [`src/training/neural.py`](../src/training/neural.py):
 
 | | |
 |---|---|
 | Optimizador | Adam, `LEARNING_RATE = 1e-3` |
-| Épocas | `N_EPOCHS = 5` |
+| Épocas | `N_EPOCHS = 5`, o las de `--epochs` del pipeline |
 | Batch | `BATCH_SIZE = 200` instancias |
 | Recorte de gradiente | norma máxima $\tau$ = `GRAD_CLIP_NORM = 1.0`: $g \leftarrow g \cdot \min\left(1, \frac{\tau}{\lVert g \rVert_2}\right)$, con $g$ todos los gradientes juntos |
 | Pesos con los que se queda | los de la época $e^* = \arg\max_e \overline{F_1}^{\,\text{test}}(e)$, con mejor F1 macro promedio en **test** (en las conjuntas, promedio de las 3 tareas) |
 | Inicialización | `torch.manual_seed(12)` antes de crear cada red |
-
-## Métrica
-
-La del enunciado: **F1 macro a nivel palabra, por tarea** ([`src/metrics/`](../src/metrics/)).
-Aunque los modelos predicen por token, cada palabra cuenta una vez, sin importar en cuántos
-tokens se parta.
-
-| Tarea | Clase real de la palabra | Clase predicha de la palabra | F1 macro sobre |
-|---|---|---|---|
-| `capitalizacion` | la del primer token (todos tienen la misma) | la más votada entre sus tokens (empate: la que aparece primero) | 4 clases |
-| `punt_inicial` | la del primer token | la del primer token | 2 clases |
-| `punt_final` | la del último token | la del último token | 4 clases |
-
-Con $\hat{y}_t$ la clase predicha de cada token, la predicha de la palabra $w$ en
-capitalización es la más votada:
-
-$$\hat{y}_w = \arg\max_c \big|\{\, t \in w : \hat{y}_t = c \,\}\big|$$
-
-Sobre las palabras, para cada clase $c$ de la tarea, con $TP_c$, $FP_c$ y $FN_c$ los
-verdaderos positivos, falsos positivos y falsos negativos:
-
-$$P_c = \frac{TP_c}{TP_c + FP_c}, \qquad R_c = \frac{TP_c}{TP_c + FN_c}, \qquad F_{1,c} = \frac{2\, P_c R_c}{P_c + R_c}, \qquad F_1^{\text{macro}} = \frac{1}{C} \sum_{c=1}^{C} F_{1,c}$$
-
-(una división por cero vale 0).
-
-- El macro promedia **todas** las clases, aparezcan o no en los datos (una clase ausente cuenta
-  como F1 = 0). Como pesa lo mismo cada clase, las raras (MiXta, MAYÚS, `¿`, `?`) mueven mucho
-  el resultado aunque sean pocas palabras.
-- Para comparar modelos de un problema se usa el **promedio del F1 macro de sus tareas** $\mathcal{T}$,
-  $\overline{F_1} = \frac{1}{|\mathcal{T}|} \sum_{k \in \mathcal{T}} F_1^{\text{macro}}(k)$
-  (`mean_score`): para elegir la época de cada red, el modelo ganador y el score del nombre del
-  archivo.
-- Por cada corrida, `models/<día>__<hora>/metrics.json` guarda el F1 macro y la matriz de
-  confusión por tarea, en test y en control, de todos los modelos, y el historial por época de
-  las redes (ver [`src/training/report.py`](../src/training/report.py)). Lo lee
-  `notebooks/poster.ipynb` para los gráficos.

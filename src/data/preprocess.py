@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Lector de cada fuente de DATASET_SOURCES
 READERS: dict[str, Callable[[str], list[Document]]] = {
-    "es": read_line_sentences,
+    "tatoeba": read_line_sentences,
     "rioplatense": read_line_sentences,
     "ted": read_ted,
     "mrbeast": read_subtitles,

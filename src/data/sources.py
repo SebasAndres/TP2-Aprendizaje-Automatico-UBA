@@ -3,7 +3,7 @@
 Cada fuente viene en un formato distinto. Cada lector limpia su formato y devuelve una lista
 de documentos, donde un documento es una lista de oraciones de texto continuo:
 
-- Oraciones sueltas (es.txt.gz, rioplatense): no hay contexto entre líneas, así que todo
+- Oraciones sueltas (Tatoeba en es.txt.gz, rioplatense): no hay contexto entre líneas, así que todo
   el archivo es un único documento con una oración por línea.
 - Charlas TED: una charla por línea, con un encabezado "Traductor: X Y Revisor: Z W".
   Cada charla es un documento.

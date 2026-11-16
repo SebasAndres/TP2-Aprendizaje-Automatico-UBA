@@ -265,6 +265,22 @@ def train_neural_model(
 
     weights = class_weights(train_loader.dataset, class_weight_power)
 
+    if weights is not None:
+        if weights.size(0) == 1:
+            # Capitalización
+            weights[0][1] *= 0.7   # Inicial (estable)
+            weights[0][2] *= 0.8   # MiXta (estable)
+            weights[0][3] *= 0.65  # MAYÚS (destrabamos la predicción)
+        
+        elif weights.size(0) == 2:
+            # Puntuación Inicial
+            weights[0][1] *= 0.35  # ¿ (ajuste sutil para subir precisión)
+            
+            # Puntuación Final
+            weights[1][1] *= 0.75  # , (estable)
+            weights[1][2] *= 0.65   #
+            weights[1][3] *= 0.7   # ? (estable)
+
     history, best = [], None
     for epoch in range(1, n_epochs + 1):
         train_loss, train_log = _train_epoch(model, train_loader, feature_extractor, metric, optimizer, device, weights)

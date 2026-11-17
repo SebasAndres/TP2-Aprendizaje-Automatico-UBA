@@ -25,7 +25,25 @@ FINAL_MARKS: dict[str, Puntuacion] = {
 
 
 def word_punctuation(word: str) -> tuple[Puntuacion, Puntuacion]:
-    """Devuelve <PuntuacionInicial, PuntuacionFinal> según los signos en los bordes de la palabra"""
+    """Clasifica la puntuación inicial y final según los signos en los bordes de la palabra.
+
+    Parameters
+    ----------
+    word : str
+        Palabra con su puntuación original.
+
+    Returns
+    -------
+    initial : Puntuacion
+        ``OPEN_QUESTION`` si la palabra empieza con "¿", si no ``NO_PUNCTUATION``.
+    final : Puntuacion
+        El signo final de mayor prioridad (ver ``FINAL_MARKS``), o ``NO_PUNCTUATION``.
+
+    Examples
+    --------
+    >>> word_punctuation("¿Qué?")
+    (1, 3)
+    """
     prefix = word[: len(word) - len(word.lstrip(PUNCTUATION_MARKS))]
     suffix = word[len(word.rstrip(PUNCTUATION_MARKS)) :]
     initial = OPEN_QUESTION if "¿" in prefix else NO_PUNCTUATION
@@ -34,17 +52,35 @@ def word_punctuation(word: str) -> tuple[Puntuacion, Puntuacion]:
 
 
 class PunctuationDataset(TextDataset):
+    """Dataset del problema de puntuación: ``[inicial, final]`` por token (ver ``TextDataset``)."""
+
     def _expected_output(self, words: list[str], word_tokens: list[list[str]]) -> torch.Tensor:
-        """
-        Devuelve un tensor (n_tokens, 2) con <PuntuacionInicial, PuntuacionFinal> para cada token.
-        La inicial va al primer token de la palabra y la final al último. Los signos sueltos
-        (palabras sin tokens, ej: "¿ qué ?") se asignan al token siguiente o anterior.
+        """Asigna la puntuación inicial al primer token de cada palabra y la final al último.
 
-        Cada fila es [inicial, final]. Los valores son índices de INITIAL_LABELS y FINAL_LABELS:
-            inicial: 0 = "", 1 = "¿"
-            final:   0 = "", 1 = ",", 2 = ".", 3 = "?"
+        Los signos sueltos (palabras sin tokens, ej: "¿ qué ?") se asignan al token
+        siguiente (la inicial) o al anterior (la final).
 
-        Ejemplo: "¿Cuándo vamos a McDonald's? Ellos no vienen hoy."
+        Parameters
+        ----------
+        words : list[str]
+            Palabras originales de la instancia.
+        word_tokens : list[list[str]]
+            Tokens de cada palabra normalizada.
+
+        Returns
+        -------
+        torch.Tensor of shape (n_tokens, 2)
+            Cada fila es ``[inicial, final]``, índices de ``INITIAL_LABELS`` y
+            ``FINAL_LABELS``: inicial 0 = "", 1 = "¿"; final 0 = "", 1 = ",", 2 = ".", 3 = "?".
+
+        Notes
+        -----
+        Para reconstruir: ``INITIAL_LABELS[y[i][0]] + token + FINAL_LABELS[y[i][1]]``.
+
+        Examples
+        --------
+        "¿Cuándo vamos a McDonald's? Ellos no vienen hoy."::
+
             token    inicial  final
             cu          1       0     <- "¿" va al primer token de la palabra
             ##ánd       0       0
@@ -65,9 +101,9 @@ class PunctuationDataset(TextDataset):
             hoy         0       2     <- "."
 
         Un token puede tener las dos: "¿Qué?" -> qué -> [[1, 3]]
-        Un signo suelto se pega al token anterior: "Hola , la" -> hol, ##a, la -> [[0, 0], [0, 1], [0, 0]]
 
-        Para reconstruir: INITIAL_LABELS[y[i][0]] + token + FINAL_LABELS[y[i][1]]
+        Un signo suelto se pega al token anterior: "Hola , la" -> hol, ##a, la ->
+        [[0, 0], [0, 1], [0, 0]]
         """
         labels: list[list[Puntuacion]] = []
         pending_initial = NO_PUNCTUATION

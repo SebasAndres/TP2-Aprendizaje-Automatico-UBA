@@ -35,8 +35,20 @@ READERS: dict[str, Callable[[str], list[Document]]] = {
 
 
 def load_documents() -> dict[str, list[Document]]:
-    """Lee cada fuente de DATASET_SOURCES con su lector. Una fuente que no está en disco se
-    saltea con un warning; si no hay ninguna, falla"""
+    """Lee cada fuente de ``DATASET_SOURCES`` con su lector.
+
+    Una fuente que no está en disco se saltea con un warning.
+
+    Returns
+    -------
+    dict[str, list[Document]]
+        Los documentos de cada fuente encontrada, por nombre de fuente.
+
+    Raises
+    ------
+    FileNotFoundError
+        Si no se encontró ninguna fuente.
+    """
     documents = {}
     for name, path in DATASET_SOURCES.items():
         if not Path(path).exists():
@@ -53,8 +65,24 @@ def load_samples(
     size: int | None,
     window: WindowSpec | None = WindowSpec(),
 ) -> list[Sample]:
-    """Corta cada fuente en instancias (ventanas o oraciones) y toma las primeras `size` de
-    cada una (todas si es None), así ninguna fuente tapa al resto"""
+    """Corta cada fuente en instancias y toma las primeras ``size`` de cada una.
+
+    Así ninguna fuente tapa al resto.
+
+    Parameters
+    ----------
+    documents : dict[str, list[Document]]
+        Documentos de cada fuente (ver ``load_documents``).
+    size : int or None
+        Máximo de instancias por fuente; ``None`` toma todas.
+    window : WindowSpec or None, default=WindowSpec()
+        Cómo cortar las ventanas; ``None`` usa una oración por instancia.
+
+    Returns
+    -------
+    list[Sample]
+        Las instancias de todas las fuentes, en el orden de ``documents``.
+    """
     samples = []
     for name, source_documents in documents.items():
         source_samples = build_samples(source_documents, window)[:size]
@@ -68,17 +96,23 @@ def preprocess_dataset(
     capitalization_size: int = CAPITALIZATION_DATASET_SIZE,
     window: WindowSpec | None = WindowSpec(),
 ) -> tuple[Dataset, Dataset]:
-    """
-    A partir de las fuentes locales crea las instancias del punctuation dataset y
-    capitalization dataset. Cada fuente aporta como mucho `*_size` instancias, cortadas
-    en ventanas según `window` (o una oración por instancia si window es None).
+    """Crea los datasets de puntuación y de capitalización a partir de las fuentes locales.
+
+    Parameters
+    ----------
+    punctuation_size : int, default=PUNCTUATION_DATASET_SIZE
+        Máximo de instancias por fuente para puntuación.
+    capitalization_size : int, default=CAPITALIZATION_DATASET_SIZE
+        Máximo de instancias por fuente para capitalización.
+    window : WindowSpec or None, default=WindowSpec()
+        Cómo cortar las ventanas; ``None`` usa una oración por instancia.
 
     Returns
-    ------
-    - punctuation_dataset: PunctuationDataset
-        El dataset completo para el problema de puntuación
-    - capitalization_datset: CapitalizationDataset
-        El dataset completo para el problema de capitalización
+    -------
+    punctuation_dataset : PunctuationDataset
+        El dataset completo para el problema de puntuación.
+    capitalization_dataset : CapitalizationDataset
+        El dataset completo para el problema de capitalización.
     """
     documents = load_documents()
     punctuation_dataset = PunctuationDataset(load_samples(documents, punctuation_size, window))
@@ -88,7 +122,20 @@ def preprocess_dataset(
 
 
 def split_dataset_dev_control(dataset: Dataset) -> tuple[Dataset, Dataset]:
-    """Divide el dataset en Train/Test devolviendo los Datasets"""
+    """Divide el dataset en desarrollo y control, con la semilla fija.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        El dataset completo de un problema.
+
+    Returns
+    -------
+    development_dataset : Dataset
+        ``1 - CONTROL_RATIO`` de las instancias, para entrenar y elegir modelos.
+    control_dataset : Dataset
+        ``CONTROL_RATIO`` de las instancias, para la evaluación final.
+    """
 
     total_size = len(dataset)
     control_size = int(CONTROL_RATIO * total_size)
@@ -101,8 +148,23 @@ def split_dataset_dev_control(dataset: Dataset) -> tuple[Dataset, Dataset]:
 
 
 def split_train_test(development_dataset: Dataset) -> tuple[Dataset, Dataset]:
-    """Divide el dataset de desarrollo en train y test. Con la misma semilla, todos los
-    modelos se entrenan y evalúan sobre las mismas oraciones"""
+    """Divide el dataset de desarrollo en train y test, con la semilla fija.
+
+    Con la misma semilla, todos los modelos se entrenan y evalúan sobre las mismas
+    instancias.
+
+    Parameters
+    ----------
+    development_dataset : Dataset
+        El dataset de desarrollo (ver ``split_dataset_dev_control``).
+
+    Returns
+    -------
+    train_dataset : Dataset
+        ``1 - TEST_RATIO`` de las instancias.
+    test_dataset : Dataset
+        ``TEST_RATIO`` de las instancias.
+    """
     train_dataset, test_dataset = random_split(
         development_dataset, [1 - TEST_RATIO, TEST_RATIO], generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
@@ -110,8 +172,19 @@ def split_train_test(development_dataset: Dataset) -> tuple[Dataset, Dataset]:
 
 
 def dataset_samples(dataset: Dataset) -> list[Sample]:
-    """Las instancias (palabras con su puntuación y capitalización originales) de un dataset,
-    en el mismo orden que dataset[i], atravesando los Subset que generan los splits"""
+    """Devuelve las instancias de un dataset, atravesando los ``Subset`` de los splits.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Un ``TextDataset`` o un ``Subset`` (anidado o no) de uno.
+
+    Returns
+    -------
+    list[Sample]
+        Las palabras con su puntuación y capitalización originales, en el mismo
+        orden que ``dataset[i]``.
+    """
     if isinstance(dataset, Subset):
         samples = dataset_samples(dataset.dataset)
         return [samples[i] for i in dataset.indices]
@@ -119,5 +192,19 @@ def dataset_samples(dataset: Dataset) -> list[Sample]:
 
 
 def build_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
-    """DataLoader por batches de oraciones, con las etiquetas rellenadas con IGNORE_INDEX"""
+    """Crea un DataLoader por batches de instancias.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Dataset de pares ``(tokens, etiquetas)``.
+    shuffle : bool
+        Si se mezclan las instancias en cada época.
+
+    Returns
+    -------
+    DataLoader
+        Batches de ``BATCH_SIZE`` instancias, con las etiquetas rellenadas con
+        ``IGNORE_INDEX`` (ver ``collate_batch``).
+    """
     return DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=shuffle, num_workers=0, collate_fn=collate_batch)

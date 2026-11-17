@@ -42,7 +42,7 @@ class CapitalizationRNN(nn.Module):
         input_dim: int = EMBEDDING_DIM,
         hidden_dim: int = HIDDEN_DIM,
         n_classes: int = N_CAPITALIZATION_CLASSES,
-    ):
+    ) -> None:
         super().__init__()
         self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True)  # W_x, W_h, b
         self.out = nn.Linear(hidden_dim, n_classes)  # W_y, b_y

@@ -80,8 +80,21 @@ CLASS_LABELS = {
 
 
 def model_tasks(report: Report, split: str) -> ModelTasks:
-    """Las tareas de cada modelo en ese split, juntando los dos problemas, del mejor al peor según
-    el promedio del F1 macro de sus tareas (empates: en el orden de MODEL_LABELS)"""
+    """Junta las tareas de cada modelo en ese split, de los dos problemas.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    split : str
+        ``"test"`` o ``"control"``.
+
+    Returns
+    -------
+    ModelTasks
+        Tareas de cada modelo, del mejor al peor según el promedio del F1 macro de sus
+        tareas (empates: en el orden de ``MODEL_LABELS``).
+    """
     merged: ModelTasks = {}
     for models in report["problems"].values():
         for model, model_report in models.items():
@@ -93,11 +106,34 @@ def model_tasks(report: Report, split: str) -> ModelTasks:
 
 
 def label(model: str) -> str:
+    """Devuelve el nombre del modelo para el póster.
+
+    Parameters
+    ----------
+    model : str
+        Nombre del experimento.
+
+    Returns
+    -------
+    str
+        El nombre de ``MODEL_LABELS``, o ``model`` si no tiene.
+    """
     return MODEL_LABELS.get(model, model)
 
 
 def per_class_f1(confusion: list[list[int]]) -> np.ndarray:
-    """F1 de cada clase a partir de la matriz de confusión (0 si no hay datos)"""
+    """Calcula el F1 de cada clase a partir de la matriz de confusión.
+
+    Parameters
+    ----------
+    confusion : list[list[int]]
+        Matriz de confusión, fila = clase real, columna = clase predicha.
+
+    Returns
+    -------
+    np.ndarray of shape (n_clases,)
+        F1 de cada clase (0 si no hay datos).
+    """
     counts = np.asarray(confusion, dtype=float)
     hits = np.diag(counts)
     precision = hits / np.maximum(counts.sum(axis=0), 1)
@@ -106,13 +142,32 @@ def per_class_f1(confusion: list[list[int]]) -> np.ndarray:
 
 
 def class_columns() -> list[tuple[str, int]]:
-    """(tarea, clase) de cada columna de los gráficos por clase: 4 + 2 + 4"""
+    """Lista las columnas de los gráficos por clase: 4 + 2 + 4.
+
+    Returns
+    -------
+    list[tuple[str, int]]
+        ``(tarea, clase)`` de cada columna.
+    """
     sizes = {"capitalizacion": 4, "punt_inicial": 2, "punt_final": 4}
     return [(task, c) for task in TASKS for c in range(sizes[task])]
 
 
 def f1_table(report: Report, split: str) -> str:
-    """Tabla de texto con el F1 macro de cada modelo y tarea, y el promedio"""
+    """Arma una tabla de texto con el F1 macro de cada modelo y tarea, y el promedio.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    split : str
+        ``"test"`` o ``"control"``.
+
+    Returns
+    -------
+    str
+        La tabla, una línea por modelo.
+    """
     lines = [f"{'modelo':<28}" + "".join(f"{TASK_LABELS[t]:>20}" for t in TASKS) + f"{'promedio':>10}"]
     for model, tasks in model_tasks(report, split).items():
         scores = [tasks[t]["f1_macro"] if t in tasks else np.nan for t in TASKS]
@@ -121,7 +176,22 @@ def f1_table(report: Report, split: str) -> str:
 
 
 def best_model(report: Report, problem: str, split: str) -> str:
-    """El modelo del problema con mejor F1 macro promedio entre sus tareas"""
+    """Elige el modelo del problema con mejor F1 macro promedio entre sus tareas.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    problem : str
+        Nombre del problema.
+    split : str
+        ``"test"`` o ``"control"``.
+
+    Returns
+    -------
+    str
+        Nombre del modelo.
+    """
     models = report["problems"][problem]
     return max(
         (model for model in models if models[model].get(split)),
@@ -133,7 +203,15 @@ def best_model(report: Report, problem: str, split: str) -> str:
 
 
 def _style(ax: Axes, grid_axis: str = "x") -> None:
-    """Grilla y ejes discretos, sin bordes de arriba ni de la derecha"""
+    """Aplica grilla y ejes discretos, sin bordes de arriba ni de la derecha.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel a estilizar.
+    grid_axis : str, default="x"
+        Eje de la grilla (``"x"``, ``"y"`` o ``"both"``).
+    """
     ax.set_facecolor(SURFACE)
     ax.grid(axis=grid_axis, color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
@@ -145,18 +223,48 @@ def _style(ax: Axes, grid_axis: str = "x") -> None:
 
 
 def _title(fig: Figure, title: str) -> None:
-    """Título general arriba a la izquierda (tight_layout ya le reserva su lugar)"""
+    """Pone el título general arriba a la izquierda (``tight_layout`` ya le reserva su lugar).
+
+    Parameters
+    ----------
+    fig : Figure
+        Figura.
+    title : str
+        Título general.
+    """
     fig.suptitle(title, x=0.01, ha="left", fontsize=13, color=TEXT_PRIMARY)
     fig.tight_layout()
 
 
 def _thousands(n: int) -> str:
-    """9856 -> '9.856'"""
+    """Formatea un entero con punto de miles.
+
+    Parameters
+    ----------
+    n : int
+        Número a formatear.
+
+    Returns
+    -------
+    str
+        Ej: ``9856`` -> ``'9.856'``.
+    """
     return f"{n:,}".replace(",", ".")
 
 
 def _splits_text(splits: dict[str, dict[str, int]]) -> str:
-    """Ej: 'train 9.856 instancias (317.204 palabras), test 2.464, control 3.080'"""
+    """Describe el tamaño de los splits de un problema.
+
+    Parameters
+    ----------
+    splits : dict[str, dict[str, int]]
+        ``{"instances", "words"}`` de train, test y control.
+
+    Returns
+    -------
+    str
+        Ej: ``'train 9.856 instancias (317.204 palabras), test 2.464, control 3.080'``.
+    """
     train = splits["train"]
     return (
         f"train {_thousands(train['instances'])} instancias ({_thousands(train['words'])} palabras), "
@@ -165,8 +273,20 @@ def _splits_text(splits: dict[str, dict[str, int]]) -> str:
 
 
 def data_caption(report: Report) -> str:
-    """Con cuántos datos y épocas se entrenó la corrida, para el pie de cada gráfico. Si los dos
-    problemas usaron las mismas instancias se dice una vez; si no, una por problema"""
+    """Describe con cuántos datos y épocas se entrenó la corrida, para el pie de cada gráfico.
+
+    Si los dos problemas usaron las mismas instancias se dice una vez; si no, una por problema.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+
+    Returns
+    -------
+    str
+        El texto del pie.
+    """
     config, data = report["config"], report.get("data", {})
     texts = {problem: _splits_text(splits) for problem, splits in data.items()}
     if len(set(texts.values())) == 1:
@@ -181,14 +301,32 @@ def data_caption(report: Report) -> str:
 
 
 def add_caption(fig: Figure, caption: str) -> None:
-    """Agrega una línea al pie del gráfico, achicando los paneles para que entre"""
+    """Agrega una línea al pie del gráfico, achicando los paneles para que entre.
+
+    Parameters
+    ----------
+    fig : Figure
+        Figura.
+    caption : str
+        Texto del pie.
+    """
     height = fig.get_figheight()
     fig.subplots_adjust(bottom=fig.subplotpars.bottom + 0.45 / height)
     fig.text(0.01, 0.08 / height, caption, ha="left", va="bottom", fontsize=9, color=TEXT_SECONDARY)
 
 
 def save_figure(fig: Figure, out_dir: str | Path, name: str) -> None:
-    """Guarda el gráfico en PNG (para ver) y en PDF (vectorial, para el póster)"""
+    """Guarda el gráfico en PNG (para ver) y en PDF (vectorial, para el póster).
+
+    Parameters
+    ----------
+    fig : Figure
+        Figura a guardar.
+    out_dir : str or Path
+        Carpeta de salida; se crea si no existe.
+    name : str
+        Nombre de los archivos, sin extensión.
+    """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_dir / f"{name}.png", dpi=200, facecolor=SURFACE)
@@ -199,7 +337,20 @@ def save_figure(fig: Figure, out_dir: str | Path, name: str) -> None:
 
 
 def plot_f1_by_task(report: Report, split: str) -> Figure:
-    """Un panel por tarea con el F1 macro de cada modelo: la comparación general"""
+    """Dibuja un panel por tarea con el F1 macro de cada modelo: la comparación general.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    split : str
+        ``"test"`` o ``"control"``.
+
+    Returns
+    -------
+    Figure
+        El gráfico.
+    """
     tasks_by_model = model_tasks(report, split)
     models = list(tasks_by_model)[::-1]  # el primero arriba
     fig, axes = plt.subplots(1, len(TASKS), figsize=(14, 0.45 * len(models) + 1.6), sharey=True, facecolor=SURFACE)
@@ -216,7 +367,18 @@ def plot_f1_by_task(report: Report, split: str) -> Figure:
 
 
 def _class_matrix(tasks_by_model: ModelTasks) -> np.ndarray:
-    """(n_modelos, n_columnas): F1 de cada clase de cada tarea, NaN si el modelo no tiene la tarea"""
+    """Arma la matriz de F1 de cada clase de cada tarea, por modelo.
+
+    Parameters
+    ----------
+    tasks_by_model : ModelTasks
+        Tareas de cada modelo.
+
+    Returns
+    -------
+    np.ndarray of shape (n_modelos, n_columnas)
+        F1 de cada clase (ver ``class_columns``); NaN si el modelo no tiene la tarea.
+    """
     rows = []
     for tasks in tasks_by_model.values():
         f1 = {task: per_class_f1(tasks[task]["confusion"]) for task in tasks}
@@ -225,8 +387,19 @@ def _class_matrix(tasks_by_model: ModelTasks) -> np.ndarray:
 
 
 def _class_axis(ax: Axes, separator: str, separator_width: float) -> None:
-    """Nombres de las clases abajo y de la tarea arriba de cada grupo de columnas, con una
-    línea vertical entre tareas"""
+    """Pone los nombres de las clases abajo y de la tarea arriba de cada grupo de columnas.
+
+    Agrega una línea vertical entre tareas.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel.
+    separator : str
+        Color de la línea entre tareas.
+    separator_width : float
+        Ancho de la línea entre tareas.
+    """
     columns = class_columns()
     ax.set_xticks(range(len(columns)), [CLASS_LABELS[task][c] for task, c in columns], fontsize=9)
     start = 0
@@ -249,7 +422,20 @@ def _class_axis(ax: Axes, separator: str, separator_width: float) -> None:
 
 
 def plot_class_f1(report: Report, split: str) -> Figure:
-    """F1 de cada clase para cada modelo: qué clase le costó más a cada modelo"""
+    """Dibuja el F1 de cada clase para cada modelo: qué clase le costó más a cada modelo.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    split : str
+        ``"test"`` o ``"control"``.
+
+    Returns
+    -------
+    Figure
+        El gráfico.
+    """
     tasks_by_model = model_tasks(report, split)
     values = _class_matrix(tasks_by_model)
     fig, ax = plt.subplots(figsize=(12, 0.5 * len(values) + 1.8), facecolor=SURFACE)
@@ -278,7 +464,17 @@ def plot_class_f1(report: Report, split: str) -> Figure:
 
 
 def _pair_panel(ax: Axes, tasks_by_model: ModelTasks, pair: tuple[str, str]) -> None:
-    """Barras del F1 por clase de los dos modelos, una al lado de la otra"""
+    """Dibuja las barras del F1 por clase de los dos modelos, una al lado de la otra.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel.
+    tasks_by_model : ModelTasks
+        Tareas de cada modelo.
+    pair : tuple[str, str]
+        Los dos modelos a comparar.
+    """
     x = np.arange(len(class_columns()))
     width = 0.38
     for k, (model, offset) in enumerate(zip(pair, (-width / 2, width / 2))):
@@ -294,8 +490,27 @@ def _pair_panel(ax: Axes, tasks_by_model: ModelTasks, pair: tuple[str, str]) -> 
 
 
 def plot_pairs_by_class(report: Report, split: str, pairs: list[tuple[str, str]], title: str) -> Figure | None:
-    """Un panel por par de modelos con el F1 de cada clase. Se saltean los pares incompletos.
-    Ej: separada vs conjunta (¿conviene compartir pesos?), unidireccional vs bidireccional"""
+    """Dibuja un panel por par de modelos con el F1 de cada clase.
+
+    Se saltean los pares incompletos. Ej: separada vs conjunta (¿conviene compartir
+    pesos?), unidireccional vs bidireccional.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    split : str
+        ``"test"`` o ``"control"``.
+    pairs : list[tuple[str, str]]
+        Pares de modelos a comparar.
+    title : str
+        Título general.
+
+    Returns
+    -------
+    Figure or None
+        El gráfico, o ``None`` si no hay ningún par completo.
+    """
     tasks_by_model = model_tasks(report, split)
     pairs = [pair for pair in pairs if all(model in tasks_by_model for model in pair)]
     if not pairs:
@@ -308,8 +523,22 @@ def plot_pairs_by_class(report: Report, split: str, pairs: list[tuple[str, str]]
 
 
 def _test_curve(model_report: Report) -> tuple[list[int], list[float]]:
-    """Épocas y F1 macro promedio en test de cada una, sobre las tareas del problema (las redes
-    conjuntas tienen historial de las 3)"""
+    """Calcula el F1 macro promedio en test de cada época.
+
+    Promedia sobre las tareas del problema (las redes conjuntas tienen historial de las 3).
+
+    Parameters
+    ----------
+    model_report : Report
+        Reporte de un modelo, con ``"test"`` e ``"history"``.
+
+    Returns
+    -------
+    epochs : list[int]
+        Número de cada época.
+    scores : list[float]
+        F1 macro promedio en test de cada época.
+    """
     tasks = list(model_report["test"])
     epochs = [epoch["epoch"] for epoch in model_report["history"]]
     scores = [float(np.mean([epoch["test_score"][task] for task in tasks])) for epoch in model_report["history"]]
@@ -317,21 +546,59 @@ def _test_curve(model_report: Report) -> tuple[list[int], list[float]]:
 
 
 def _curve_style(model: str) -> dict[str, Any]:
-    """Color y marcador fijos de la red (gris con círculo si es una red nueva sin estilo asignado)"""
+    """Devuelve el color y el marcador fijos de la red.
+
+    Parameters
+    ----------
+    model : str
+        Nombre del experimento.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"color", "marker"}``; gris con círculo si es una red nueva sin estilo asignado.
+    """
     color, marker = NETWORK_STYLES.get(model, (TEXT_SECONDARY, "o"))
     return {"color": color, "marker": marker}
 
 
 def _kept_score(curve: tuple[list[int], list[float]], best_epoch: int | None) -> float:
-    """F1 en test de la época con la que se quedó la red (el máximo si no lo dice)"""
+    """Devuelve el F1 en test de la época con la que se quedó la red.
+
+    Parameters
+    ----------
+    curve : tuple[list[int], list[float]]
+        Épocas y F1 de cada una (ver ``_test_curve``).
+    best_epoch : int or None
+        Época con la que se quedó; ``None`` usa el máximo.
+
+    Returns
+    -------
+    float
+        El F1 de esa época.
+    """
     epochs, scores = curve
     return scores[epochs.index(best_epoch)] if best_epoch else max(scores)
 
 
 def plot_learning_curves(report: Report, problem: str) -> Figure | None:
-    """F1 macro promedio en test por época de cada red, con su color y marcador fijos; el marcador
-    grande es la época con la que se quedó. La leyenda va de mejor a peor (por el F1 de esa
-    época). None si la corrida no tiene historial (corridas viejas)"""
+    """Dibuja el F1 macro promedio en test por época de cada red.
+
+    Cada red tiene su color y marcador fijos; el marcador grande es la época con la que
+    se quedó. La leyenda va de mejor a peor (por el F1 de esa época).
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    problem : str
+        Nombre del problema.
+
+    Returns
+    -------
+    Figure or None
+        El gráfico, o ``None`` si la corrida no tiene historial (corridas viejas).
+    """
     curves = {
         m: (_test_curve(r), r.get("best_epoch")) for m, r in report["problems"][problem].items() if r.get("history")
     }
@@ -362,8 +629,24 @@ def plot_learning_curves(report: Report, problem: str) -> Figure | None:
 
 
 def plot_confusions(report: Report, split: str, models: dict[str, str]) -> Figure:
-    """Matrices de confusión normalizadas por fila (la diagonal es el recall) de un modelo por
-    problema. models: problema -> modelo"""
+    """Dibuja las matrices de confusión normalizadas por fila de un modelo por problema.
+
+    La diagonal es el recall.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    split : str
+        ``"test"`` o ``"control"``.
+    models : dict[str, str]
+        Modelo a mostrar de cada problema.
+
+    Returns
+    -------
+    Figure
+        El gráfico, un panel por tarea.
+    """
     panels = [
         (problem, model, task, confusion["confusion"])
         for problem, model in models.items()

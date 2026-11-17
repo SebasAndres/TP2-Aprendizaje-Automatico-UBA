@@ -46,7 +46,7 @@ class CapitalizationBidirectionalRNN(nn.Module):
         hidden_dim: int = HIDDEN_DIM,
         n_classes: int = N_CAPITALIZATION_CLASSES,
         dropout: float = 0.0,
-    ):
+    ) -> None:
         super().__init__()
         # 1. Activamos la lectura en ambas direcciones
         self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True, bidirectional=True)

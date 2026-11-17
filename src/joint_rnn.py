@@ -46,7 +46,20 @@ logger = logging.getLogger("src.joint_rnn")
 
 
 def _loaders(dataset: Dataset) -> tuple[DataLoader, DataLoader]:
-    """Mismos splits y semillas que el pipeline"""
+    """Crea los loaders de train y test con los mismos splits y semillas que el pipeline.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        El ``JointDataset`` completo.
+
+    Returns
+    -------
+    train_loader : DataLoader
+        Instancias de train, mezcladas.
+    test_loader : DataLoader
+        Instancias de test.
+    """
     development_set, _ = split_dataset_dev_control(dataset)
     train_set, test_set = split_train_test(development_set)
     logger.info("Instancias: train=%d, test=%d", len(train_set), len(test_set))
@@ -54,6 +67,7 @@ def _loaders(dataset: Dataset) -> tuple[DataLoader, DataLoader]:
 
 
 def main() -> None:
+    """Entrena una red conjunta desde la línea de comandos y la guarda como el pipeline."""
     parser = argparse.ArgumentParser(description="Entrena una RNN conjunta de capitalización y puntuación")
     parser.add_argument(
         "--size", type=int, default=None, help="usar como mucho N instancias de cada fuente (default: todas)"
@@ -94,9 +108,19 @@ def main() -> None:
 
 
 def save_joint_result(result: TrainResult, name: str) -> None:
-    """Guarda la red como lo hace el pipeline, en models/<día>__<hora>/<Problema>/<score>__<name>.pkl,
-    una copia por problema con el score de sus tareas. Así src.inference la encuentra al elegir
-    cualquiera de los dos problemas, y como es conjunta predice los dos"""
+    """Guarda la red como lo hace el pipeline, una copia por problema con el score de sus tareas.
+
+    El archivo queda en ``models/<día>__<hora>/<Problema>/<score>__<name>.pkl``. Así
+    ``src.inference`` la encuentra al elegir cualquiera de los dos problemas, y como es
+    conjunta predice los dos.
+
+    Parameters
+    ----------
+    result : TrainResult
+        Resultado del entrenamiento, con las 3 tareas.
+    name : str
+        Nombre del experimento (ver ``joint_model_name``).
+    """
     run_dir = create_run_directory()
     for problem in (CapitalizationProblem(), PunctuationProblem()):
         problem_result = result.only_tasks(problem.metric.tasks)

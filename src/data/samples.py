@@ -27,23 +27,59 @@ DISTRIBUTIONS: tuple[Distribution, ...] = ("uniform", "normal")
 
 @dataclass(frozen=True)
 class WindowSpec:
-    """Cómo se sortea el largo (en palabras) de cada ventana:
-    - uniform: cualquier largo entre min_size y max_size con la misma probabilidad
-    - normal: centrada en el punto medio, con desvío (max - min) / 6, recortada a [min, max]
-    Con min_size == max_size todas las ventanas tienen el mismo largo."""
+    """Cómo se sortea el largo (en palabras) de cada ventana.
+
+    Con ``min_size == max_size`` todas las ventanas tienen el mismo largo.
+
+    Parameters
+    ----------
+    min_size : int, default=WINDOW_MIN_SIZE
+        Largo mínimo de una ventana.
+    max_size : int, default=WINDOW_MAX_SIZE
+        Largo máximo de una ventana.
+    distribution : {"uniform", "normal"}, default=WINDOW_DISTRIBUTION
+        ``"uniform"``: cualquier largo entre ``min_size`` y ``max_size`` con la misma
+        probabilidad. ``"normal"``: centrada en el punto medio, con desvío
+        ``(max - min) / 6``, recortada a ``[min, max]``.
+
+    Raises
+    ------
+    ValueError
+        Si no se cumple ``1 <= min_size <= max_size`` o la distribución no existe.
+    """
 
     min_size: int = WINDOW_MIN_SIZE
     max_size: int = WINDOW_MAX_SIZE
     distribution: Distribution = WINDOW_DISTRIBUTION
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Valida los largos y la distribución.
+
+        Raises
+        ------
+        ValueError
+            Si no se cumple ``1 <= min_size <= max_size`` o la distribución no existe.
+        """
         if not 1 <= self.min_size <= self.max_size:
             raise ValueError(f"Se necesita 1 <= min_size <= max_size, no {self.min_size}, {self.max_size}")
         if self.distribution not in DISTRIBUTIONS:
             raise ValueError(f"Distribución desconocida {self.distribution!r}, opciones: {DISTRIBUTIONS}")
 
     def draw(self, rng: np.random.Generator, n: int) -> np.ndarray:
-        """Sortea `n` largos de ventana"""
+        """Sortea ``n`` largos de ventana.
+
+        Parameters
+        ----------
+        rng : np.random.Generator
+            Generador con el que se sortea.
+        n : int
+            Cantidad de largos a sortear.
+
+        Returns
+        -------
+        np.ndarray of shape (n,)
+            Largos enteros entre ``min_size`` y ``max_size``.
+        """
         if self.distribution == "uniform":
             return rng.integers(self.min_size, self.max_size + 1, size=n)
         mean = (self.min_size + self.max_size) / 2
@@ -52,15 +88,42 @@ class WindowSpec:
 
 
 def by_sentence(documents: list[Document]) -> list[Sample]:
-    """Una instancia por oración"""
+    """Corta los documentos con una instancia por oración.
+
+    Parameters
+    ----------
+    documents : list[Document]
+        Documentos de una fuente.
+
+    Returns
+    -------
+    list[Sample]
+        Las palabras de cada oración.
+    """
     return [sentence.split() for document in documents for sentence in document]
 
 
 def by_window(documents: list[Document], window: WindowSpec, seed: int = RANDOM_SEED) -> list[Sample]:
-    """Ventanas de palabras seguidas con largo sorteado según `window`, sin solaparse. Las
-    ventanas no cruzan de un documento a otro; la última de cada documento puede ser más
-    corta que el mínimo. Con la misma semilla los cortes son siempre los mismos, así los
-    splits train/test/control no cambian entre corridas"""
+    """Corta los documentos en ventanas de palabras seguidas, sin solaparse.
+
+    Las ventanas no cruzan de un documento a otro; la última de cada documento puede
+    ser más corta que el mínimo. Con la misma semilla los cortes son siempre los
+    mismos, así los splits train/test/control no cambian entre corridas.
+
+    Parameters
+    ----------
+    documents : list[Document]
+        Documentos de una fuente.
+    window : WindowSpec
+        Cómo se sortea el largo de cada ventana.
+    seed : int, default=RANDOM_SEED
+        Semilla del sorteo.
+
+    Returns
+    -------
+    list[Sample]
+        Las palabras de cada ventana.
+    """
     rng = np.random.default_rng(seed)
     samples = []
     for document in documents:
@@ -75,12 +138,31 @@ def by_window(documents: list[Document], window: WindowSpec, seed: int = RANDOM_
 
 
 def build_samples(documents: list[Document], window: WindowSpec | None) -> list[Sample]:
-    """Ventanas según `window`, o una instancia por oración si es None"""
+    """Corta los documentos en ventanas según ``window``, o por oración si es ``None``.
+
+    Parameters
+    ----------
+    documents : list[Document]
+        Documentos de una fuente.
+    window : WindowSpec or None
+        Cómo cortar las ventanas; ``None`` usa una oración por instancia.
+
+    Returns
+    -------
+    list[Sample]
+        Las instancias de la fuente.
+    """
     return by_sentence(documents) if window is None else by_window(documents, window)
 
 
 def add_window_args(parser: ArgumentParser) -> None:
-    """Agrega a un CLI las opciones para elegir cómo cortar las instancias"""
+    """Agrega a un CLI las opciones para elegir cómo cortar las instancias.
+
+    Parameters
+    ----------
+    parser : ArgumentParser
+        Parser al que se agregan ``--window-size`` y ``--window-distribution``.
+    """
     parser.add_argument(
         "--window-size",
         type=int,
@@ -99,7 +181,23 @@ def add_window_args(parser: ArgumentParser) -> None:
 
 
 def window_from_args(args: Namespace) -> WindowSpec | None:
-    """El WindowSpec elegido con las opciones de add_window_args (None = por oración)"""
+    """Arma el ``WindowSpec`` elegido con las opciones de ``add_window_args``.
+
+    Parameters
+    ----------
+    args : Namespace
+        Argumentos parseados, con ``window_size`` y ``window_distribution``.
+
+    Returns
+    -------
+    WindowSpec or None
+        La ventana pedida, o ``None`` (una oración por instancia) si ``--window-size 0``.
+
+    Raises
+    ------
+    ValueError
+        Si ``--window-size`` recibe más de 2 valores.
+    """
     sizes = args.window_size
     if sizes == [0]:
         return None

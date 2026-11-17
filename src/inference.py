@@ -100,34 +100,111 @@ Punctuations = list[tuple[int, int]]
 
 
 def model_name(path: Path) -> str:
-    """Nombre del modelo sin el score. Ej: '0.812__standard_rnn.pkl' -> 'standard_rnn'"""
+    """Extrae el nombre del modelo, sin el score.
+
+    Parameters
+    ----------
+    path : Path
+        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+
+    Returns
+    -------
+    str
+        Ej: ``'0.812__standard_rnn.pkl'`` -> ``'standard_rnn'``.
+    """
     return path.stem.split(RUN_SEPARATOR)[-1]
 
 
 def run_info(path: Path) -> str:
-    """Score del modelo. Ej: 'F1 0.812'"""
+    """Extrae el score del modelo de su nombre de archivo.
+
+    Parameters
+    ----------
+    path : Path
+        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+
+    Returns
+    -------
+    str
+        Ej: ``'F1 0.812'``.
+    """
     score, _ = path.stem.split(RUN_SEPARATOR)
     return f"F1 {score}"
 
 
 def problem_of(path: Path) -> str:
-    """El problema es la carpeta del archivo: models/<día>__<hora>/<Problema>/<archivo>"""
+    """Devuelve el problema del modelo: la carpeta del archivo.
+
+    Parameters
+    ----------
+    path : Path
+        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+
+    Returns
+    -------
+    str
+        Ej: ``'CapitalizationProblem'``.
+    """
     return path.parent.name
 
 
 def run_of(folder: Path) -> str:
-    """La ejecución es la carpeta de arriba del problema. Ej: '2026-11-12__19-30-05'"""
+    """Devuelve la ejecución: la carpeta de arriba del problema.
+
+    Parameters
+    ----------
+    folder : Path
+        Carpeta ``models/<día>__<hora>/<Problema>``.
+
+    Returns
+    -------
+    str
+        Ej: ``'2026-11-12__19-30-05'``.
+    """
     return folder.parent.name
 
 
 @cache
 def _extractor(extractor_class: type[TextFeatureExtractor]) -> TextFeatureExtractor:
-    """Una sola instancia por tipo de extractor: los de embeddings cargan BERT"""
+    """Crea una sola instancia por tipo de extractor (los de embeddings cargan BERT).
+
+    Parameters
+    ----------
+    extractor_class : type[TextFeatureExtractor]
+        Clase del extractor.
+
+    Returns
+    -------
+    TextFeatureExtractor
+        La instancia, compartida entre llamadas.
+    """
     return extractor_class()
 
 
 def load_model(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextFeatureExtractor]]:
-    """Devuelve el modelo listo para predecir y el extractor con el que se entrenó"""
+    """Carga un modelo guardado y elige el extractor con el que se entrenó.
+
+    Parameters
+    ----------
+    path : Path
+        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+    problem : Problem
+        Problema del modelo, para crear la red antes de cargar los pesos.
+    name : str
+        Nombre del modelo (ver ``model_name``).
+
+    Returns
+    -------
+    model : Any
+        La red en modo eval o el ``ClassicModel``.
+    extractor_class : type[TextFeatureExtractor]
+        Clase del extractor de features del modelo.
+
+    Raises
+    ------
+    ValueError
+        Si la extensión o el nombre no corresponden a un modelo conocido.
+    """
     if path.suffix == ".joblib" and name in CLASSIC_EXTRACTORS:
         return joblib.load(path), CLASSIC_EXTRACTORS[name]
     if path.suffix == ".pkl" and name in NETWORKS:
@@ -141,28 +218,59 @@ def load_model(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextF
 
 
 class LoadedModel:
-    """Un modelo entrenado y el extractor de features con el que se entrenó"""
+    """Un modelo entrenado y el extractor de features con el que se entrenó.
 
-    def __init__(self, path: Path):
+    Parameters
+    ----------
+    path : Path
+        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+
+    Attributes
+    ----------
+    name : str
+        ``<ejecución>/<Problema>/<score>__<modelo>``, para mostrar.
+    is_joint : bool
+        Si es una red conjunta (predice los dos problemas).
+    model : Any
+        La red o el ``ClassicModel``.
+    extractor : TextFeatureExtractor
+        Extractor de features del modelo.
+
+    Raises
+    ------
+    ValueError
+        Si la carpeta del archivo no es un problema conocido.
+    """
+
+    def __init__(self, path: Path) -> None:
         problem_name, name = problem_of(path), model_name(path)
         if problem_name not in PROBLEMS:
             raise ValueError(
                 f"No reconozco el problema de {path}: se espera models/<día>__<hora>/<{'|'.join(PROBLEMS)}>/..."
             )
         problem = PROBLEMS[problem_name]
-        self.problem_name = problem_name
         self.name = f"{run_of(path.parent)}/{problem_name}/{path.stem}"
         self.is_joint = name in JOINT_NETWORKS
         self.model, extractor_class = load_model(path, problem, name)
         self.extractor = _extractor(extractor_class)
 
     def predict(self, tokens: list[str]) -> torch.Tensor:
-        """Clases predichas de cada token: (n_tokens, n_columnas). Las columnas son
-        - capitalización:   [capitalización]
-        - puntuación:       [inicial, final]
-        - red conjunta:     [capitalización, inicial, final]
-        Así la capitalización siempre es la primera columna y la puntuación las dos últimas.
-        Los modelos clásicos predicen por palabra: cada token recibe la clase de su palabra"""
+        """Predice las clases de cada token.
+
+        Los modelos clásicos predicen por palabra: cada token recibe la clase de su palabra.
+
+        Parameters
+        ----------
+        tokens : list[str]
+            Tokens BERT de una instancia.
+
+        Returns
+        -------
+        torch.Tensor of shape (n_tokens, n_columnas)
+            Las columnas son ``[capitalización]`` (capitalización), ``[inicial, final]``
+            (puntuación) o ``[capitalización, inicial, final]`` (red conjunta). Así la
+            capitalización siempre es la primera columna y la puntuación las dos últimas.
+        """
         if isinstance(self.model, nn.Module):
             features = self.extractor.extract(tokens)  # (n_tokens, n_features)
             pred = predict(self.model, features.unsqueeze(0), [len(tokens)])[0]
@@ -172,8 +280,24 @@ class LoadedModel:
 
 
 def tokenize(text: str, tokenizer: BertTokenizer) -> tuple[list[str], list[list[str]]]:
-    """Normaliza cada palabra como el dataset y la tokeniza. Descarta las que quedan vacías
-    (signos sueltos). Devuelve las palabras normalizadas y los tokens de cada una"""
+    """Normaliza cada palabra como el dataset y la tokeniza.
+
+    Descarta las que quedan vacías (signos sueltos).
+
+    Parameters
+    ----------
+    text : str
+        Texto ingresado.
+    tokenizer : BertTokenizer
+        Tokenizador de ``EMBEDDINGS_MODEL``.
+
+    Returns
+    -------
+    words : list[str]
+        Las palabras normalizadas.
+    word_tokens : list[list[str]]
+        Los tokens de cada palabra.
+    """
     words, word_tokens = [], []
     for word in text.split():
         normalized = normalize_word(word)
@@ -185,37 +309,104 @@ def tokenize(text: str, tokenizer: BertTokenizer) -> tuple[list[str], list[list[
 
 
 def _word_ids(word_tokens: list[list[str]]) -> np.ndarray:
-    """Índice de la palabra de cada token. Ej: [["hol", "##a"], ["la"]] -> [0, 0, 1]"""
+    """Calcula el índice de la palabra de cada token.
+
+    Parameters
+    ----------
+    word_tokens : list[list[str]]
+        Tokens de cada palabra.
+
+    Returns
+    -------
+    np.ndarray of shape (n_tokens,)
+        Ej: ``[["hol", "##a"], ["la"]]`` -> ``[0, 0, 1]``.
+    """
     return np.repeat(np.arange(len(word_tokens)), [len(tokens) for tokens in word_tokens])
 
 
 def _all_tokens(word_tokens: list[list[str]]) -> list[str]:
+    """Aplana los tokens de todas las palabras.
+
+    Parameters
+    ----------
+    word_tokens : list[list[str]]
+        Tokens de cada palabra.
+
+    Returns
+    -------
+    list[str]
+        Todos los tokens, en orden.
+    """
     return [token for tokens in word_tokens for token in tokens]
 
 
 @dataclass
 class ModelSelection:
-    """Los modelos elegidos: como máximo uno por problema"""
+    """Los modelos elegidos: como máximo uno por problema.
+
+    Attributes
+    ----------
+    capitalization : LoadedModel or None
+        Modelo elegido para capitalización.
+    punctuation : LoadedModel or None
+        Modelo elegido para puntuación.
+    """
 
     capitalization: LoadedModel | None = None
     punctuation: LoadedModel | None = None
 
     def for_capitalization(self) -> LoadedModel | None:
-        """El modelo de capitalización o, si no hay, la red conjunta elegida para puntuación"""
+        """Elige el modelo de capitalización o, si no hay, la red conjunta elegida para puntuación.
+
+        Returns
+        -------
+        LoadedModel or None
+            El modelo que predice la capitalización, o ``None``.
+        """
         return self.capitalization or _joint_or_none(self.punctuation)
 
     def for_punctuation(self) -> LoadedModel | None:
-        """El modelo de puntuación o, si no hay, la red conjunta elegida para capitalización"""
+        """Elige el modelo de puntuación o, si no hay, la red conjunta elegida para capitalización.
+
+        Returns
+        -------
+        LoadedModel or None
+            El modelo que predice la puntuación, o ``None``.
+        """
         return self.punctuation or _joint_or_none(self.capitalization)
 
 
 def _joint_or_none(model: LoadedModel | None) -> LoadedModel | None:
+    """Devuelve el modelo solo si es una red conjunta.
+
+    Parameters
+    ----------
+    model : LoadedModel or None
+        Modelo elegido para el otro problema.
+
+    Returns
+    -------
+    LoadedModel or None
+        ``model`` si es conjunta, si no ``None``.
+    """
     return model if model and model.is_joint else None
 
 
 def predict_capitalization(model: LoadedModel | None, word_tokens: list[list[str]]) -> Capitalizations | None:
-    """Capitalización de cada palabra: la clase más votada entre sus tokens, como la métrica.
-    None si no hay modelo"""
+    """Predice la capitalización de cada palabra: la clase más votada entre sus tokens, como la métrica.
+
+    Parameters
+    ----------
+    model : LoadedModel or None
+        Modelo que predice la tarea, o ``None``.
+    word_tokens : list[list[str]]
+        Tokens de cada palabra normalizada.
+
+    Returns
+    -------
+    Capitalizations or None
+        La clase de cada palabra, o ``None`` si no hay modelo.
+    """
     if model is None:
         return None
     pred = model.predict(_all_tokens(word_tokens))[:, 0].numpy()  # primera columna
@@ -223,8 +414,20 @@ def predict_capitalization(model: LoadedModel | None, word_tokens: list[list[str
 
 
 def predict_punctuation(model: LoadedModel | None, word_tokens: list[list[str]]) -> Punctuations | None:
-    """Puntuación de cada palabra: la inicial del primer token y la final del último, como la
-    métrica. None si no hay modelo"""
+    """Predice la puntuación de cada palabra: la inicial del primer token y la final del último, como la métrica.
+
+    Parameters
+    ----------
+    model : LoadedModel or None
+        Modelo que predice la tarea, o ``None``.
+    word_tokens : list[list[str]]
+        Tokens de cada palabra normalizada.
+
+    Returns
+    -------
+    Punctuations or None
+        ``(inicial, final)`` de cada palabra, o ``None`` si no hay modelo.
+    """
     if model is None:
         return None
     pred = model.predict(_all_tokens(word_tokens))[:, -2:].numpy()  # dos últimas columnas: [inicial, final]
@@ -235,8 +438,23 @@ def predict_punctuation(model: LoadedModel | None, word_tokens: list[list[str]])
 
 
 def capitalize(word: str, capitalization: int) -> str:
-    """Aplica la clase de capitalización a la palabra. La mixta (ej: "McDonald's") no dice
-    qué letras van en mayúscula, así que se marca con un * y queda en minúscula"""
+    """Aplica la clase de capitalización a la palabra.
+
+    La mixta (ej: "McDonald's") no dice qué letras van en mayúscula, así que se marca
+    con un * y queda en minúscula.
+
+    Parameters
+    ----------
+    word : str
+        Palabra normalizada.
+    capitalization : int
+        ``LOWERCASE``, ``TITLE``, ``MIXED`` o ``UPPERCASE``.
+
+    Returns
+    -------
+    str
+        La palabra capitalizada.
+    """
     return {
         LOWERCASE: word,
         TITLE: word.capitalize(),
@@ -246,19 +464,62 @@ def capitalize(word: str, capitalization: int) -> str:
 
 
 def apply_capitalization(words: list[str], capitalizations: Capitalizations | None) -> list[str]:
+    """Aplica la capitalización predicha a cada palabra.
+
+    Parameters
+    ----------
+    words : list[str]
+        Palabras normalizadas.
+    capitalizations : Capitalizations or None
+        Clase de cada palabra; con ``None`` las palabras quedan igual.
+
+    Returns
+    -------
+    list[str]
+        Las palabras capitalizadas.
+    """
     if capitalizations is None:
         return words
     return [capitalize(word, c) for word, c in zip(words, capitalizations)]
 
 
 def apply_punctuation(words: list[str], punctuations: Punctuations | None) -> list[str]:
+    """Agrega a cada palabra sus signos inicial y final predichos.
+
+    Parameters
+    ----------
+    words : list[str]
+        Palabras (ya capitalizadas).
+    punctuations : Punctuations or None
+        ``(inicial, final)`` de cada palabra; con ``None`` las palabras quedan igual.
+
+    Returns
+    -------
+    list[str]
+        Las palabras con su puntuación.
+    """
     if punctuations is None:
         return words
     return [INITIAL_LABELS[initial] + word + FINAL_LABELS[final] for word, (initial, final) in zip(words, punctuations)]
 
 
 def format_table(words: list[str], capitalizations: Capitalizations | None, punctuations: Punctuations | None) -> str:
-    """Tabla con la clase predicha de cada palabra (solo las columnas que tienen modelo)"""
+    """Arma una tabla con la clase predicha de cada palabra (solo las columnas que tienen modelo).
+
+    Parameters
+    ----------
+    words : list[str]
+        Palabras normalizadas.
+    capitalizations : Capitalizations or None
+        Clase de capitalización de cada palabra.
+    punctuations : Punctuations or None
+        ``(inicial, final)`` de cada palabra.
+
+    Returns
+    -------
+    str
+        La tabla, una línea por palabra.
+    """
     width = max(len(word) for word in words + ["palabra"]) + 2
     header = "palabra".ljust(width)
     header += "capitalización".ljust(16) if capitalizations else ""
@@ -275,8 +536,27 @@ def format_table(words: list[str], capitalizations: Capitalizations | None, punc
 
 
 def answer(text: str, selection: ModelSelection, tokenizer: BertTokenizer, verbose: bool) -> str:
-    """Normaliza el texto como el dataset y lo reconstruye: primero la capitalización y
-    después la puntuación (al revés, "¿hola".capitalize() no cambiaría nada)"""
+    """Normaliza el texto como el dataset y lo reconstruye con los modelos elegidos.
+
+    Aplica primero la capitalización y después la puntuación (al revés,
+    ``"¿hola".capitalize()`` no cambiaría nada).
+
+    Parameters
+    ----------
+    text : str
+        Texto ingresado.
+    selection : ModelSelection
+        Modelos elegidos.
+    tokenizer : BertTokenizer
+        Tokenizador de ``EMBEDDINGS_MODEL``.
+    verbose : bool
+        Si agrega la tabla con la clase de cada palabra.
+
+    Returns
+    -------
+    str
+        El texto reconstruido (y la tabla, si ``verbose``).
+    """
     words, word_tokens = tokenize(text, tokenizer)
     if not words:
         return "(no quedó ninguna palabra después de normalizar)"
@@ -300,14 +580,35 @@ CLEAR_COMMANDS = {"/limpiar", "/clear"}
 
 
 def available_runs(problem_name: str) -> list[Path]:
-    """Carpetas models/<día>__<hora>/<Problema> con modelos de ese problema, la ejecución más
-    reciente primero"""
+    """Busca las carpetas ``models/<día>__<hora>/<Problema>`` con modelos de ese problema.
+
+    Parameters
+    ----------
+    problem_name : str
+        Nombre del problema.
+
+    Returns
+    -------
+    list[Path]
+        Las carpetas, la ejecución más reciente primero.
+    """
     folders = Path(MODELS_DIR).glob(f"*/{problem_name}")
     return sorted((folder for folder in folders if available_models(folder)), reverse=True)
 
 
 def available_models(folder: Path) -> list[Path]:
-    """Modelos de esa ejecución que este script sabe cargar, el de mejor score primero"""
+    """Lista los modelos de esa ejecución que este script sabe cargar.
+
+    Parameters
+    ----------
+    folder : Path
+        Carpeta ``models/<día>__<hora>/<Problema>``.
+
+    Returns
+    -------
+    list[Path]
+        Los modelos, el de mejor score primero.
+    """
     known = set(NETWORKS) | set(CLASSIC_EXTRACTORS)
     return sorted(
         (
@@ -320,20 +621,56 @@ def available_models(folder: Path) -> list[Path]:
 
 
 def _model_choice(path: Path) -> questionary.Choice:
-    """Ej: 'bidirectional_rnn    F1 0.871   red' / '... red · predice las 3 tareas'"""
+    """Arma la opción del menú de un modelo.
+
+    Parameters
+    ----------
+    path : Path
+        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+
+    Returns
+    -------
+    questionary.Choice
+        Ej: ``'bidirectional_rnn    F1 0.871   red'`` o ``'... red · predice las 3 tareas'``.
+    """
     name = model_name(path)
     extra = " · predice las 3 tareas" if name in JOINT_NETWORKS else ""
     return questionary.Choice(f"{name:<28} {run_info(path):<10} {KIND_LABELS[path.suffix]}{extra}", value=path)
 
 
 def _run_choice(folder: Path) -> questionary.Choice:
-    """Ej: '2026-11-12__19-30-05   (5 modelos)'"""
+    """Arma la opción del menú de una ejecución.
+
+    Parameters
+    ----------
+    folder : Path
+        Carpeta ``models/<día>__<hora>/<Problema>``.
+
+    Returns
+    -------
+    questionary.Choice
+        Ej: ``'2026-11-12__19-30-05   (5 modelos)'``.
+    """
     return questionary.Choice(f"{run_of(folder)}   ({len(available_models(folder))} modelos)", value=folder)
 
 
 def choose_model(problem_name: str, label: str) -> Path | str | None:
-    """Pide ejecución y después modelo de esa ejecución. Devuelve el path, '' si no se elige
-    ninguno y None si se cancela. Desde el menú de modelos se puede volver al de ejecuciones"""
+    """Pide la ejecución y después el modelo de esa ejecución.
+
+    Desde el menú de modelos se puede volver al de ejecuciones.
+
+    Parameters
+    ----------
+    problem_name : str
+        Nombre del problema.
+    label : str
+        Nombre del problema para mostrar.
+
+    Returns
+    -------
+    Path or str or None
+        El path elegido, ``''`` si no se elige ninguno y ``None`` si se cancela.
+    """
     none, back = questionary.Choice("ninguno", value=""), questionary.Choice("← volver", value="back")
     while True:
         folder = questionary.select(
@@ -350,7 +687,13 @@ def choose_model(problem_name: str, label: str) -> Path | str | None:
 
 
 def choose_models() -> dict[str, Path] | None:
-    """Pide un modelo por problema (o ninguno). Devuelve {problema: path}; None si se cancela"""
+    """Pide un modelo por problema (o ninguno).
+
+    Returns
+    -------
+    dict[str, Path] or None
+        ``{problema: path}``; ``None`` si se cancela.
+    """
     chosen = {}
     for problem_name, label in PROBLEM_LABELS.items():
         if not available_runs(problem_name):
@@ -365,7 +708,23 @@ def choose_models() -> dict[str, Path] | None:
 
 
 def paths_by_problem(paths: list[Path]) -> dict[str, Path]:
-    """Ordena los -m por problema (la carpeta del archivo). Falla si hay dos del mismo"""
+    """Ordena los ``-m`` por problema (la carpeta del archivo).
+
+    Parameters
+    ----------
+    paths : list[Path]
+        Paths pasados con ``-m``.
+
+    Returns
+    -------
+    dict[str, Path]
+        ``{problema: path}``.
+
+    Raises
+    ------
+    ValueError
+        Si hay dos modelos del mismo problema.
+    """
     chosen = {}
     for path in paths:
         problem_name = problem_of(path)
@@ -376,6 +735,18 @@ def paths_by_problem(paths: list[Path]) -> dict[str, Path]:
 
 
 def load_selection(paths: dict[str, Path]) -> ModelSelection:
+    """Carga los modelos elegidos y muestra qué modelo predice cada problema.
+
+    Parameters
+    ----------
+    paths : dict[str, Path]
+        ``{problema: path}``.
+
+    Returns
+    -------
+    ModelSelection
+        Los modelos cargados.
+    """
     print("Cargando modelos...")
     selection = ModelSelection(
         capitalization=LoadedModel(paths["CapitalizationProblem"]) if "CapitalizationProblem" in paths else None,
@@ -386,7 +757,13 @@ def load_selection(paths: dict[str, Path]) -> ModelSelection:
 
 
 def print_selection(selection: ModelSelection) -> None:
-    """Qué modelo predice cada problema"""
+    """Muestra qué modelo predice cada problema.
+
+    Parameters
+    ----------
+    selection : ModelSelection
+        Modelos elegidos.
+    """
     for label, model in (
         ("capitalización", selection.for_capitalization()),
         ("puntuación", selection.for_punctuation()),
@@ -395,7 +772,18 @@ def print_selection(selection: ModelSelection) -> None:
 
 
 def choose_action(verbose: bool) -> str:
-    """Menú principal. Ctrl+C equivale a salir"""
+    """Muestra el menú principal. Ctrl+C equivale a salir.
+
+    Parameters
+    ----------
+    verbose : bool
+        Si el detalle por palabra está activo (cambia el texto de esa opción).
+
+    Returns
+    -------
+    str
+        Una de las constantes ``ACTION_*``.
+    """
     detail = "Ocultar detalle por palabra" if verbose else "Mostrar detalle por palabra"
     return (
         questionary.select(
@@ -413,7 +801,13 @@ def choose_action(verbose: bool) -> str:
 
 
 def clear_screen(selection: ModelSelection) -> None:
-    """Borra la terminal y vuelve a mostrar qué modelos están cargados"""
+    """Borra la terminal y vuelve a mostrar qué modelos están cargados.
+
+    Parameters
+    ----------
+    selection : ModelSelection
+        Modelos cargados.
+    """
     print("\033[2J\033[3J\033[H", end="", flush=True)  # pantalla, historial y cursor arriba
     print("Modelos cargados:")
     print_selection(selection)
@@ -422,7 +816,18 @@ def clear_screen(selection: ModelSelection) -> None:
 
 def try_texts(selection: ModelSelection, tokenizer: BertTokenizer, verbose: bool) -> None:
     """Pide textos hasta recibir uno vacío y muestra la reconstrucción de cada uno.
-    /limpiar (o /clear) borra la pantalla"""
+
+    ``/limpiar`` (o ``/clear``) borra la pantalla.
+
+    Parameters
+    ----------
+    selection : ModelSelection
+        Modelos cargados.
+    tokenizer : BertTokenizer
+        Tokenizador de ``EMBEDDINGS_MODEL``.
+    verbose : bool
+        Si muestra la tabla con la clase de cada palabra.
+    """
     while True:
         text = questionary.text("Texto (Enter vacío para volver al menú, /limpiar para borrar):").ask()
         if not text or not text.strip():
@@ -434,6 +839,17 @@ def try_texts(selection: ModelSelection, tokenizer: BertTokenizer, verbose: bool
 
 
 def run_menu(selection: ModelSelection, tokenizer: BertTokenizer, verbose: bool) -> None:
+    """Corre el menú principal hasta que se elige salir.
+
+    Parameters
+    ----------
+    selection : ModelSelection
+        Modelos cargados al empezar.
+    tokenizer : BertTokenizer
+        Tokenizador de ``EMBEDDINGS_MODEL``.
+    verbose : bool
+        Si arranca mostrando el detalle por palabra.
+    """
     while True:
         action = choose_action(verbose)
         if action == ACTION_EXIT:
@@ -449,6 +865,7 @@ def run_menu(selection: ModelSelection, tokenizer: BertTokenizer, verbose: bool)
 
 
 def main() -> None:
+    """Lee los argumentos, carga los modelos (de ``-m`` o del menú) y abre el menú principal."""
     parser = ArgumentParser(description="Reconstruye capitalización y puntuación de un texto con modelos entrenados")
     parser.add_argument(
         "-m",

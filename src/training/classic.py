@@ -41,29 +41,82 @@ N_FOLDS = 5
 
 @dataclass
 class ClassicModel:
-    """Lo que se guarda de un modelo clásico: el estimador de sklearn y, si se usa, el
-    diccionario de capitalización armado con train"""
+    """Lo que se guarda de un modelo clásico.
+
+    Attributes
+    ----------
+    estimator : Any
+        Estimador de sklearn, entrenado a nivel palabra.
+    dictionary : CapitalizationDictionary or None, default=None
+        Diccionario de capitalización armado con train, si el modelo lo usa.
+    """
 
     estimator: Any
     dictionary: CapitalizationDictionary | None = None
 
     def features(self, extractor: TextFeatureExtractor, tokens: list[str]) -> np.ndarray:
-        """(n_palabras, n_features): las del extractor, más las del diccionario si hay"""
+        """Calcula las features de cada palabra: las del extractor, más las del diccionario si hay.
+
+        Parameters
+        ----------
+        extractor : TextFeatureExtractor
+            Extractor con el que se entrenó el modelo.
+        tokens : list[str]
+            Tokens BERT de una instancia.
+
+        Returns
+        -------
+        np.ndarray of shape (n_palabras, n_features)
+            Las features de cada palabra.
+        """
         X = extractor.extract_words(tokens).numpy()
         if self.dictionary is None:
             return X
         return np.hstack([X, self.dictionary.features(split_words(tokens))])
 
     def predict_words(self, extractor: TextFeatureExtractor, tokens: list[str]) -> np.ndarray:
-        """La clase predicha de cada palabra: (n_palabras,) o (n_palabras, n_tareas)"""
+        """Predice la clase de cada palabra.
+
+        Parameters
+        ----------
+        extractor : TextFeatureExtractor
+            Extractor con el que se entrenó el modelo.
+        tokens : list[str]
+            Tokens BERT de una instancia.
+
+        Returns
+        -------
+        np.ndarray of shape (n_palabras,) or (n_palabras, n_tareas)
+            La clase predicha de cada palabra.
+        """
         return self.estimator.predict(self.features(extractor, tokens))
 
 
 def _dataset_to_numpy(
     dataset: Dataset, feature_extractor: TextFeatureExtractor, metric: Metric, model_for: Callable[[int], ClassicModel]
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Matrices X (n_palabras, n_features) e Y (n_palabras,) o (n_palabras, n_tareas) de todo el
-    dataset. La oración i usa las features de `model_for(i)`. Omite las oraciones sin tokens"""
+    """Arma las matrices de features y etiquetas a nivel palabra de todo el dataset.
+
+    Omite las instancias sin tokens.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Dataset de pares ``(tokens, etiquetas)``.
+    feature_extractor : TextFeatureExtractor
+        Extractor de features por palabra.
+    metric : Metric
+        Métrica del problema, que pasa las etiquetas a nivel palabra.
+    model_for : Callable[[int], ClassicModel]
+        De qué modelo toma sus features la instancia ``i`` (ver ``_train_features_source``).
+
+    Returns
+    -------
+    X : np.ndarray of shape (n_palabras, n_features)
+        Features de cada palabra.
+    Y : np.ndarray of shape (n_palabras,) or (n_palabras, n_tareas)
+        Etiquetas de cada palabra.
+    """
     rows_X, rows_Y = [], []
     for i in range(len(dataset)):
         tokens, labels = dataset[i]
@@ -79,8 +132,23 @@ def _dataset_to_numpy(
 
 
 def _train_features_source(train_set: Dataset, model: ClassicModel) -> Callable[[int], ClassicModel]:
-    """De qué modelo toma sus features cada oración de train. Sin diccionario, del modelo
-    mismo. Con diccionario, la oración i usa uno armado sin su parte (i % N_FOLDS) de train"""
+    """Decide de qué modelo toma sus features cada instancia de train.
+
+    Sin diccionario, del modelo mismo. Con diccionario, la instancia ``i`` usa uno
+    armado sin su parte (``i % N_FOLDS``) de train.
+
+    Parameters
+    ----------
+    train_set : Dataset
+        Instancias de train.
+    model : ClassicModel
+        Modelo a entrenar.
+
+    Returns
+    -------
+    Callable[[int], ClassicModel]
+        El modelo (con su diccionario) que corresponde a la instancia ``i``.
+    """
     if model.dictionary is None:
         return lambda i: model
     samples = dataset_samples(train_set)
@@ -101,8 +169,28 @@ def train_classic_model(
     problem: Problem,
     use_dictionary: bool = False,
 ) -> TrainResult:
-    """Ajusta el modelo clásico del problema sobre train y devuelve sus predicciones sobre
-    test a nivel palabra. No entrena por épocas, así que no tiene historial"""
+    """Ajusta el modelo clásico del problema sobre train y lo evalúa sobre test.
+
+    No entrena por épocas, así que no tiene historial.
+
+    Parameters
+    ----------
+    train_loader : DataLoader
+        Instancias de train.
+    test_loader : DataLoader
+        Instancias de test.
+    feature_extractor : TextFeatureExtractor
+        Extractor con el que se calculan las features por palabra.
+    problem : Problem
+        Problema a resolver: da el modelo clásico y la métrica.
+    use_dictionary : bool, default=False
+        Si agrega las features del diccionario de capitalización.
+
+    Returns
+    -------
+    TrainResult
+        El ``ClassicModel`` ajustado y sus predicciones sobre test a nivel palabra.
+    """
     train_set = train_loader.dataset
     model = ClassicModel(problem.classic_model())
     if use_dictionary:
@@ -120,11 +208,40 @@ def train_classic_model(
 
 
 def classic_trainer(use_dictionary: bool) -> Trainer:
-    """`train_classic_model` con la firma de `Experiment.trainer`, fijando si usa el diccionario"""
+    """Adapta ``train_classic_model`` a la firma de ``Experiment.trainer``.
+
+    Parameters
+    ----------
+    use_dictionary : bool
+        Si el modelo usa el diccionario de capitalización.
+
+    Returns
+    -------
+    Trainer
+        Función ``(train_loader, test_loader, feature_extractor, problem) -> TrainResult``.
+    """
 
     def trainer(
         train_loader: DataLoader, test_loader: DataLoader, feature_extractor: TextFeatureExtractor, problem: Problem
     ) -> TrainResult:
+        """Entrena el modelo clásico con ``use_dictionary`` fijo.
+
+        Parameters
+        ----------
+        train_loader : DataLoader
+            Instancias de train.
+        test_loader : DataLoader
+            Instancias de test.
+        feature_extractor : TextFeatureExtractor
+            Extractor con el que se calculan las features por palabra.
+        problem : Problem
+            Problema a resolver: da el modelo clásico y la métrica.
+
+        Returns
+        -------
+        TrainResult
+            Ver ``train_classic_model``.
+        """
         return train_classic_model(train_loader, test_loader, feature_extractor, problem, use_dictionary)
 
     return trainer
@@ -133,8 +250,24 @@ def classic_trainer(use_dictionary: bool) -> Trainer:
 def evaluate_classic_model(
     model: ClassicModel, loader: DataLoader, feature_extractor: TextFeatureExtractor, problem: Problem
 ) -> dict[str, WordLevelTask]:
-    """Predice con un modelo clásico ya ajustado y devuelve las clases reales y predichas
-    a nivel palabra de cada tarea"""
+    """Predice con un modelo clásico ya ajustado.
+
+    Parameters
+    ----------
+    model : ClassicModel
+        Modelo ajustado.
+    loader : DataLoader
+        Instancias a predecir.
+    feature_extractor : TextFeatureExtractor
+        Extractor con el que se entrenó el modelo.
+    problem : Problem
+        Problema del modelo: da la métrica.
+
+    Returns
+    -------
+    dict[str, WordLevelTask]
+        Clases reales y predichas a nivel palabra de cada tarea.
+    """
     X, Y = _dataset_to_numpy(loader.dataset, feature_extractor, problem.metric, lambda i: model)
     # Cada fila ya es una palabra: cada "token" es su propia palabra
     return problem.metric.word_level(model.estimator.predict(X), Y, np.arange(len(Y)))

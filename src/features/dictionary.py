@@ -19,9 +19,21 @@ N_DICTIONARY_FEATURES = 2 + N_CAPITALIZATION_CLASSES
 
 
 class CapitalizationDictionary:
-    """Para cada palabra vista en `samples`, cuántas veces apareció con cada capitalización"""
+    """Cuenta cuántas veces apareció cada palabra con cada capitalización.
 
-    def __init__(self, samples: list[Sample]):
+    Parameters
+    ----------
+    samples : list[Sample]
+        Instancias de train con las que se arma el diccionario.
+
+    Attributes
+    ----------
+    counts : dict[str, np.ndarray]
+        Para cada palabra vista, un arreglo ``(N_CAPITALIZATION_CLASSES,)`` con las
+        apariciones de cada clase.
+    """
+
+    def __init__(self, samples: list[Sample]) -> None:
         self.counts: dict[str, np.ndarray] = {}
         for tokens, labels in CapitalizationDataset(samples):
             if not tokens:
@@ -32,8 +44,19 @@ class CapitalizationDictionary:
                 self.counts.setdefault(word, np.zeros(N_CAPITALIZATION_CLASSES))[capitalization] += 1
 
     def features(self, words: list[str]) -> np.ndarray:
-        """(n_palabras, N_DICTIONARY_FEATURES): [vista, log(1 + veces vista), proporción de
-        minúscula, Inicial, MiXta y MAYÚS]. Una palabra que no se vio tiene todo en cero"""
+        """Calcula los atributos del diccionario de cada palabra.
+
+        Parameters
+        ----------
+        words : list[str]
+            Palabras normalizadas (ver ``split_words``).
+
+        Returns
+        -------
+        np.ndarray of shape (n_palabras, N_DICTIONARY_FEATURES)
+            ``[vista, log(1 + veces vista), proporción de minúscula, Inicial, MiXta y
+            MAYÚS]``. Una palabra que no se vio tiene todo en cero.
+        """
         rows = np.zeros((len(words), N_DICTIONARY_FEATURES), dtype=np.float32)
         for i, word in enumerate(words):
             counts = self.counts.get(word)

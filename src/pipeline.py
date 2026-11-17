@@ -31,14 +31,30 @@ logger = logging.getLogger("src.pipeline")
 
 def overall_score(score: dict[str, float]) -> float:
     """Resume el F1 de cada tarea en un número para comparar experimentos: el promedio.
-    Un experimento sin score (red sin implementar) queda último"""
+
+    Parameters
+    ----------
+    score : dict[str, float]
+        F1 macro de cada tarea.
+
+    Returns
+    -------
+    float
+        El promedio; ``-inf`` si no hay score (red sin implementar), así queda último.
+    """
     if not score:
         return float("-inf")
     return sum(score.values()) / len(score)
 
 
 def parse_args() -> Namespace:
-    """Cantidad de instancias por fuente y largo de cada una; por defecto, los de src/constants.py"""
+    """Lee las opciones del pipeline; por defecto, las de ``src/constants.py``.
+
+    Returns
+    -------
+    Namespace
+        Tamaños por fuente, épocas, experimentos y ventana.
+    """
     parser = ArgumentParser(description="Entrena y compara los modelos de cada problema")
     parser.add_argument(
         "--capitalization-size",
@@ -69,7 +85,25 @@ def parse_args() -> Namespace:
 
 
 def select_experiments(experiments: list[Experiment], names: list[str] | None) -> list[Experiment]:
-    """Los experimentos pedidos, en el orden de build_experiments (todos si names es None)"""
+    """Filtra los experimentos pedidos, en el orden de ``build_experiments``.
+
+    Parameters
+    ----------
+    experiments : list[Experiment]
+        Todos los experimentos.
+    names : list[str] or None
+        Nombres pedidos; ``None`` devuelve todos.
+
+    Returns
+    -------
+    list[Experiment]
+        Los experimentos pedidos.
+
+    Raises
+    ------
+    ValueError
+        Si algún nombre no corresponde a un experimento.
+    """
     if names is None:
         return experiments
     unknown = set(names) - {experiment.name for experiment in experiments}
@@ -80,7 +114,18 @@ def select_experiments(experiments: list[Experiment], names: list[str] | None) -
 
 
 def run_config(args: Namespace) -> dict[str, Any]:
-    """Con qué datos e hiperparámetros se entrenó la corrida, para el reporte"""
+    """Arma con qué datos e hiperparámetros se entrenó la corrida, para el reporte.
+
+    Parameters
+    ----------
+    args : Namespace
+        Argumentos del pipeline (ver ``parse_args``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Tamaños, ventana, épocas, learning rate, weight decay, pesos por clase, etc.
+    """
     window = window_from_args(args)
     return {
         "capitalization_size": args.capitalization_size,

@@ -41,6 +41,13 @@ PARAMS = ("dropout", "weight_decay")
 
 
 def parse_args() -> Namespace:
+    """Lee las opciones del barrido.
+
+    Returns
+    -------
+    Namespace
+        Hiperparámetro a variar, sus valores, los valores fijos, épocas, tamaños y ventana.
+    """
     parser = ArgumentParser(description="Barrido de dropout o weight decay sobre la RNN bidireccional")
     parser.add_argument("--param", choices=PARAMS, required=True, help="hiperparámetro a variar")
     parser.add_argument("--values", type=float, nargs="+", required=True, help="valores a probar")
@@ -56,7 +63,18 @@ def parse_args() -> Namespace:
 
 
 def _loaders(dataset: Dataset) -> tuple[DataLoader, DataLoader, DataLoader]:
-    """Train, test y control con los mismos splits y semillas que el pipeline"""
+    """Crea los loaders de train, test y control con los mismos splits y semillas que el pipeline.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Dataset completo del problema.
+
+    Returns
+    -------
+    tuple[DataLoader, DataLoader, DataLoader]
+        Loaders de train (mezclado), test y control.
+    """
     development_set, control_set = split_dataset_dev_control(dataset)
     train_set, test_set = split_train_test(development_set)
     logger.info("Split: train=%d, test=%d, control=%d", len(train_set), len(test_set), len(control_set))
@@ -74,7 +92,26 @@ def train_one(
     args: Namespace,
     value: float,
 ) -> dict[str, Any]:
-    """Entrena la red bidireccional con `args.param = value` y devuelve sus métricas"""
+    """Entrena la red bidireccional con ``args.param = value`` y devuelve sus métricas.
+
+    Parameters
+    ----------
+    problem : Problem
+        Problema a resolver.
+    loaders : tuple[DataLoader, DataLoader, DataLoader]
+        Loaders de train, test y control.
+    extractor : EmbeddingsExtractor
+        Extractor de features por token.
+    args : Namespace
+        Argumentos del barrido (ver ``parse_args``).
+    value : float
+        Valor del hiperparámetro que se varía.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``value``, ``dropout``, ``weight_decay`` y las métricas de ``_metrics``.
+    """
     dropout = value if args.param == "dropout" else args.dropout
     weight_decay = value if args.param == "weight_decay" else args.weight_decay
     train_loader, test_loader, control_loader = loaders
@@ -90,7 +127,20 @@ def train_one(
 
 
 def _metrics(result: TrainResult, control: dict[str, float]) -> dict[str, Any]:
-    """Lo que se guarda de cada entrenamiento: historial, mejor época y F1 en test y control"""
+    """Arma lo que se guarda de cada entrenamiento: historial, mejor época y F1 en test y control.
+
+    Parameters
+    ----------
+    result : TrainResult
+        Resultado del entrenamiento.
+    control : dict[str, float]
+        F1 macro de cada tarea sobre control.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"best_epoch", "test_f1", "control_f1", "history"}``.
+    """
     history = [
         {
             "epoch": m.epoch,
@@ -105,7 +155,18 @@ def _metrics(result: TrainResult, control: dict[str, float]) -> dict[str, Any]:
 
 
 def config(args: Namespace) -> dict[str, Any]:
-    """Con qué se entrenó el barrido, para poder compararlo con otras corridas"""
+    """Arma con qué se entrenó el barrido, para poder compararlo con otras corridas.
+
+    Parameters
+    ----------
+    args : Namespace
+        Argumentos del barrido.
+
+    Returns
+    -------
+    dict[str, Any]
+        Los argumentos, la ventana, el learning rate y el recorte del gradiente.
+    """
     window = window_from_args(args)
     return {
         **{key: value for key, value in vars(args).items() if not key.startswith("window")},
@@ -116,7 +177,18 @@ def config(args: Namespace) -> dict[str, Any]:
 
 
 def output_path(param: str) -> Path:
-    """models/regularization/<día>__<hora>__<param>/results.json"""
+    """Crea la carpeta del barrido y devuelve dónde guardar sus resultados.
+
+    Parameters
+    ----------
+    param : str
+        ``"dropout"`` o ``"weight_decay"``.
+
+    Returns
+    -------
+    Path
+        ``models/regularization/<día>__<hora>__<param>/results.json``.
+    """
     stamp = datetime.now().strftime(f"%Y-%m-%d{RUN_SEPARATOR}%H-%M-%S")
     run_dir = Path(MODELS_DIR) / "regularization" / RUN_SEPARATOR.join((stamp, param))
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -124,6 +196,7 @@ def output_path(param: str) -> Path:
 
 
 def main() -> None:
+    """Corre el barrido sobre los dos problemas, guardando los resultados después de cada entrenamiento."""
     args = parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("src").setLevel(logging.INFO)

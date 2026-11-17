@@ -23,18 +23,61 @@ CLASS_NAMES = {
 
 
 def class_name(task: str, c: int) -> str:
-    """Nombre legible de la clase c de la tarea, para gráficos y salidas"""
+    """Devuelve el nombre legible de una clase, para gráficos y salidas.
+
+    Parameters
+    ----------
+    task : str
+        Nombre de la tarea (``"capitalizacion"``, ``"punt_inicial"`` o ``"punt_final"``).
+    c : int
+        Índice de la clase.
+
+    Returns
+    -------
+    str
+        El nombre de la clase, o ``"clase c"`` si la tarea o la clase no tienen nombre.
+    """
     names = CLASS_NAMES.get(task, [])
     return names[c] if c < len(names) else f"clase {c}"
 
 
 def macro_f1(real: np.ndarray, pred: np.ndarray, n_classes: int) -> float:
-    """F1 macro sobre todas las clases, aunque alguna no aparezca en estos datos"""
+    """Calcula el F1 macro sobre todas las clases, aunque alguna no aparezca en estos datos.
+
+    Parameters
+    ----------
+    real : np.ndarray
+        Etiquetas reales.
+    pred : np.ndarray
+        Clases predichas.
+    n_classes : int
+        Cantidad de clases de la tarea.
+
+    Returns
+    -------
+    float
+        Promedio del F1 de las clases ``0..n_classes-1`` (0 para las que no tienen datos).
+    """
     return float(f1_score(real, pred, average="macro", labels=range(n_classes), zero_division=0))
 
 
 def precision_recall(real: np.ndarray, pred: np.ndarray, n_classes: int) -> dict[int, tuple[float, float]]:
-    """(precision, recall) de cada clase, aunque alguna no aparezca en estos datos"""
+    """Calcula la precision y el recall de cada clase, aunque alguna no aparezca en estos datos.
+
+    Parameters
+    ----------
+    real : np.ndarray
+        Etiquetas reales.
+    pred : np.ndarray
+        Clases predichas.
+    n_classes : int
+        Cantidad de clases de la tarea.
+
+    Returns
+    -------
+    dict[int, tuple[float, float]]
+        ``(precision, recall)`` de cada clase.
+    """
     precision, recall, _, _ = precision_recall_fscore_support(real, pred, labels=range(n_classes), zero_division=0)
     return {c: (float(precision[c]), float(recall[c])) for c in range(n_classes)}
 
@@ -47,7 +90,26 @@ Ver src/training/weights.py"""
 def token_cross_entropy(
     logits: torch.Tensor, real: torch.Tensor, weight: torch.Tensor | None = None
 ) -> torch.Tensor:
-    """Focal Loss por token ignorando el padding. logits: (..., n_clases), real: (...)"""
+    """Calcula la Focal Loss por token, ignorando el padding.
+
+    Es la CrossEntropy de cada token multiplicada por ``(1 - p_t) ** 2``, con ``p_t``
+    la probabilidad de la clase real: los tokens que la red ya acierta con confianza
+    pesan menos.
+
+    Parameters
+    ----------
+    logits : torch.Tensor of shape (..., n_clases)
+        Salida de la red para una tarea.
+    real : torch.Tensor of shape (...)
+        Etiquetas reales, con ``IGNORE_INDEX`` en el padding.
+    weight : torch.Tensor of shape (n_clases,) or None, default=None
+        Peso de cada clase. Se recorta o se completa con 1 hasta ``n_clases``.
+
+    Returns
+    -------
+    torch.Tensor
+        Escalar con la loss promedio sobre los tokens reales (0 si no hay ninguno).
+    """
     n_classes = logits.size(-1)
     if weight is not None:
         weight = F.pad(weight[:n_classes], (0, max(0, n_classes - weight.numel())), value=1.0).to(logits.device)
@@ -73,9 +135,22 @@ def token_cross_entropy(
 def multitask_cross_entropy(
     logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None
 ) -> torch.Tensor:
-    """Suma de la CrossEntropy de cada tarea, ignorando el padding.
-    logits: (batch, n_tokens, n_tareas, n_clases), real: (batch, n_tokens, n_tareas)
-    class_weights: (n_tareas, n_clases) o None"""
+    """Suma la loss de cada tarea, ignorando el padding.
+
+    Parameters
+    ----------
+    logits : torch.Tensor of shape (batch, n_tokens, n_tareas, n_clases)
+        Salida de la red.
+    real : torch.Tensor of shape (batch, n_tokens, n_tareas)
+        Etiquetas reales, con ``IGNORE_INDEX`` en el padding.
+    class_weights : ClassWeights or None, default=None
+        Peso de cada clase de cada tarea, ``(n_tareas, n_clases)``, o ``None``.
+
+    Returns
+    -------
+    torch.Tensor
+        Escalar con la suma de ``token_cross_entropy`` de cada tarea.
+    """
     return sum(
         token_cross_entropy(
             logits[:, :, task], real[:, :, task], None if class_weights is None else class_weights[task]
@@ -85,42 +160,144 @@ def multitask_cross_entropy(
 
 
 def scores_from_tasks(tasks: dict[str, WordLevelTask]) -> dict[str, float]:
-    """F1 macro de cada tarea"""
+    """Calcula el F1 macro de cada tarea.
+
+    Parameters
+    ----------
+    tasks : dict[str, WordLevelTask]
+        Etiquetas reales, predicciones y cantidad de clases de cada tarea.
+
+    Returns
+    -------
+    dict[str, float]
+        F1 macro de cada tarea.
+    """
     return {task: macro_f1(r, p, n) for task, (r, p, n) in tasks.items()}
 
 
 def per_class_from_tasks(tasks: dict[str, WordLevelTask]) -> PerClass:
-    """(precision, recall) de cada clase de cada tarea"""
+    """Calcula la precision y el recall de cada clase de cada tarea.
+
+    Parameters
+    ----------
+    tasks : dict[str, WordLevelTask]
+        Etiquetas reales, predicciones y cantidad de clases de cada tarea.
+
+    Returns
+    -------
+    PerClass
+        Por tarea, ``(precision, recall)`` de cada clase.
+    """
     return {task: precision_recall(r, p, n) for task, (r, p, n) in tasks.items()}
 
 
 class Metric(ABC):
+    """Métrica y loss de un problema, a nivel palabra.
+
+    Attributes
+    ----------
+    tasks : tuple[str, ...]
+        Nombres de las tareas que evalúa, en el orden en que las devuelve ``word_level``.
+    """
+
     tasks: tuple[str, ...]
-    """Nombres de las tareas que evalúa, en el orden en que las devuelve `word_level`"""
 
     @abstractmethod
     def word_labels(self, labels: np.ndarray, word_ids: np.ndarray) -> np.ndarray:
-        """Pasa las etiquetas reales por token a una por palabra, tomándolas del token donde
-        las asigna el dataset. -> (n_palabras,) o (n_palabras, n_columnas). Los modelos
-        clásicos se entrenan con estas etiquetas"""
+        """Pasa las etiquetas reales por token a una por palabra.
+
+        Las toma del token donde las asigna el dataset. Los modelos clásicos se entrenan
+        con estas etiquetas.
+
+        Parameters
+        ----------
+        labels : np.ndarray of shape (n_tokens,) or (n_tokens, n_columnas)
+            Etiquetas reales de cada token.
+        word_ids : np.ndarray of shape (n_tokens,)
+            Índice de palabra de cada token.
+
+        Returns
+        -------
+        np.ndarray of shape (n_palabras,) or (n_palabras, n_columnas)
+            La etiqueta de cada palabra.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def word_level(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> dict[str, WordLevelTask]:
         """Pasa las clases por token (sin padding) a nivel palabra, separadas por tarea.
-        word_ids indica la palabra de cada token"""
+
+        Parameters
+        ----------
+        pred : np.ndarray of shape (n_tokens,) or (n_tokens, n_columnas)
+            Clases predichas de cada token, sin padding.
+        real : np.ndarray of shape (n_tokens,) or (n_tokens, n_columnas)
+            Etiquetas reales de cada token, sin padding.
+        word_ids : np.ndarray of shape (n_tokens,)
+            Índice de palabra de cada token.
+
+        Returns
+        -------
+        dict[str, WordLevelTask]
+            Etiquetas reales, predicciones y cantidad de clases de cada tarea, por palabra.
+        """
         raise NotImplementedError
 
     def score(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> dict[str, float]:
-        """F1 macro a nivel palabra de cada tarea"""
+        """Calcula el F1 macro a nivel palabra de cada tarea.
+
+        Parameters
+        ----------
+        pred : np.ndarray of shape (n_tokens,) or (n_tokens, n_columnas)
+            Clases predichas de cada token, sin padding.
+        real : np.ndarray of shape (n_tokens,) or (n_tokens, n_columnas)
+            Etiquetas reales de cada token, sin padding.
+        word_ids : np.ndarray of shape (n_tokens,)
+            Índice de palabra de cada token.
+
+        Returns
+        -------
+        dict[str, float]
+            F1 macro de cada tarea.
+        """
         return scores_from_tasks(self.word_level(pred, real, word_ids))
 
     def per_class(self, pred: np.ndarray, real: np.ndarray, word_ids: np.ndarray) -> PerClass:
-        """(precision, recall) a nivel palabra de cada clase de cada tarea"""
+        """Calcula la precision y el recall a nivel palabra de cada clase de cada tarea.
+
+        Parameters
+        ----------
+        pred : np.ndarray of shape (n_tokens,) or (n_tokens, n_columnas)
+            Clases predichas de cada token, sin padding.
+        real : np.ndarray of shape (n_tokens,) or (n_tokens, n_columnas)
+            Etiquetas reales de cada token, sin padding.
+        word_ids : np.ndarray of shape (n_tokens,)
+            Índice de palabra de cada token.
+
+        Returns
+        -------
+        PerClass
+            Por tarea, ``(precision, recall)`` de cada clase.
+        """
         return per_class_from_tasks(self.word_level(pred, real, word_ids))
 
     @abstractmethod
     def loss(self, logits: torch.Tensor, real: torch.Tensor, class_weights: ClassWeights | None = None) -> torch.Tensor:
-        """Función de pérdida a optimizar durante el entrenamiento. class_weights: peso de cada
-        clase por columna de `real` (n_columnas, n_clases), o None para no pesar"""
+        """Calcula la función de pérdida a optimizar durante el entrenamiento.
+
+        Parameters
+        ----------
+        logits : torch.Tensor of shape (batch, n_tokens, ..., n_clases)
+            Salida de la red.
+        real : torch.Tensor of shape (batch, n_tokens, ...)
+            Etiquetas reales, con ``IGNORE_INDEX`` en el padding.
+        class_weights : ClassWeights or None, default=None
+            Peso de cada clase por columna de ``real``, ``(n_columnas, n_clases)``, o
+            ``None`` para no pesar.
+
+        Returns
+        -------
+        torch.Tensor
+            Escalar con la loss del batch.
+        """
         raise NotImplementedError

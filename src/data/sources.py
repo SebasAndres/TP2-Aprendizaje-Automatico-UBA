@@ -47,9 +47,26 @@ _SRT_INNER_DASH = re.compile(r"(?<=[.?!])\s+-\s*(?=\S)")
 
 
 def clean_text(text: str) -> str:
-    """Limpieza común a todas las fuentes: saca caracteres invisibles, anotaciones entre
-    corchetes (sonidos y hablantes, no son habla) y marcas de formato, unifica los puntos
-    suspensivos y colapsa los espacios"""
+    """Limpieza común a todas las fuentes.
+
+    Saca caracteres invisibles, anotaciones entre corchetes (sonidos y hablantes, no
+    son habla) y marcas de formato, unifica los puntos suspensivos y colapsa los espacios.
+
+    Parameters
+    ----------
+    text : str
+        Texto crudo de una fuente.
+
+    Returns
+    -------
+    str
+        El texto limpio, con un solo espacio entre palabras.
+
+    Examples
+    --------
+    >>> clean_text("<i>[música]</i> Hola…  ¿qué tal?")
+    'Hola... ¿qué tal?'
+    """
     text = _INVISIBLE.sub("", text)
     text = _MARKUP.sub(" ", _BRACKETS.sub(" ", text))
     text = text.replace("…", "...").replace("♪", " ")
@@ -57,12 +74,34 @@ def clean_text(text: str) -> str:
 
 
 def split_sentences(text: str) -> list[str]:
-    """Separa un texto continuo en oraciones, cortando después de . ? ! o ..."""
+    """Separa un texto continuo en oraciones, cortando después de . ? ! o ...
+
+    Parameters
+    ----------
+    text : str
+        Texto continuo y limpio.
+
+    Returns
+    -------
+    list[str]
+        Las oraciones, sin las vacías.
+    """
     return [sentence for sentence in _SENTENCE_END.split(text) if sentence]
 
 
 def _read_text(path: Path) -> str:
-    """Lee un archivo de texto, comprimido o no"""
+    """Lee un archivo de texto, comprimido con gzip o no.
+
+    Parameters
+    ----------
+    path : Path
+        Archivo a leer; si termina en ``.gz`` se descomprime.
+
+    Returns
+    -------
+    str
+        El contenido decodificado como UTF-8.
+    """
     if path.suffix == ".gz":
         with gzip.open(path, mode="rt", encoding="utf-8") as f:
             return f.read()
@@ -70,16 +109,40 @@ def _read_text(path: Path) -> str:
 
 
 def read_line_sentences(path: str | Path) -> list[Document]:
-    """Archivo con una oración por línea (.txt o .txt.gz). Las oraciones no están relacionadas
-    entre sí, pero se devuelven como un solo documento para poder armar ventanas que crucen
-    de una oración a la siguiente"""
+    """Lee un archivo con una oración por línea (.txt o .txt.gz).
+
+    Las oraciones no están relacionadas entre sí, pero se devuelven como un solo
+    documento para poder armar ventanas que crucen de una oración a la siguiente.
+
+    Parameters
+    ----------
+    path : str or Path
+        Archivo a leer.
+
+    Returns
+    -------
+    list[Document]
+        Un único documento con las oraciones no vacías.
+    """
     lines = (clean_text(line) for line in _read_text(Path(path)).splitlines())
     return [[line for line in lines if line]]
 
 
 def read_ted(path: str | Path) -> list[Document]:
-    """Archivo con una charla TED por línea. Saca el encabezado de traductor/revisor y las
-    charlas repetidas"""
+    """Lee un archivo con una charla TED por línea.
+
+    Saca el encabezado de traductor/revisor y las charlas repetidas.
+
+    Parameters
+    ----------
+    path : str or Path
+        Archivo a leer.
+
+    Returns
+    -------
+    list[Document]
+        Un documento por charla, separado en oraciones.
+    """
     documents, seen = [], set()
     for line in _read_text(Path(path)).splitlines():
         talk = clean_text(_TED_HEADER.sub("", line.strip()))
@@ -90,9 +153,22 @@ def read_ted(path: str | Path) -> list[Document]:
 
 
 def _read_subtitle_file(path: Path) -> Document:
-    """Un archivo de subtítulos: bloques separados por líneas en blanco, cada uno repetido
-    una o más veces seguidas. Se quedan los bloques sin repetir, se unen en un texto
-    continuo y se separa en oraciones"""
+    """Lee un archivo de subtítulos de MrBeast.
+
+    El archivo tiene bloques separados por líneas en blanco, cada uno repetido una o
+    más veces seguidas. Se quedan los bloques sin repetir, se unen en un texto
+    continuo y se separa en oraciones.
+
+    Parameters
+    ----------
+    path : Path
+        Archivo de subtítulos (.txt).
+
+    Returns
+    -------
+    Document
+        Las oraciones del video.
+    """
     text = _read_text(path).replace("\r", "")
     blocks = [clean_text(block) for block in re.split(r"\n\s*\n", _INVISIBLE.sub("", text))]
     unique_blocks = [block for i, block in enumerate(blocks) if block and (i == 0 or block != blocks[i - 1])]
@@ -101,13 +177,35 @@ def _read_subtitle_file(path: Path) -> Document:
 
 
 def read_subtitles(directory: str | Path) -> list[Document]:
-    """Carpeta con un archivo de subtítulos (.txt) por video, en orden alfabético"""
+    """Lee una carpeta con un archivo de subtítulos (.txt) por video, en orden alfabético.
+
+    Parameters
+    ----------
+    directory : str or Path
+        Carpeta con los subtítulos.
+
+    Returns
+    -------
+    list[Document]
+        Un documento por video, sin los vacíos.
+    """
     files = sorted(Path(directory).glob("*.txt"))
     return [document for document in map(_read_subtitle_file, files) if document]
 
 
 def _decode(raw: bytes) -> str:
-    """Los .srt vienen en UTF-8 (a veces con BOM) o en Windows-1252"""
+    """Decodifica un .srt, que viene en UTF-8 (a veces con BOM) o en Windows-1252.
+
+    Parameters
+    ----------
+    raw : bytes
+        Contenido crudo del archivo.
+
+    Returns
+    -------
+    str
+        El texto decodificado.
+    """
     try:
         return raw.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -115,8 +213,20 @@ def _decode(raw: bytes) -> str:
 
 
 def _srt_files(directory: Path) -> Iterator[tuple[str, bytes]]:
-    """(nombre, contenido) de cada .srt de la carpeta y sus subcarpetas, sueltos o dentro de
-    un .zip, en orden alfabético"""
+    """Recorre los .srt de la carpeta y sus subcarpetas, sueltos o dentro de un .zip.
+
+    Parameters
+    ----------
+    directory : Path
+        Carpeta a recorrer.
+
+    Yields
+    ------
+    name : str
+        Path del archivo (o ``<zip>/<nombre>`` si está dentro de un .zip).
+    content : bytes
+        Contenido crudo del .srt.
+    """
     for path in sorted(directory.rglob("*")):
         if path.suffix.lower() == ".srt":
             yield str(path), path.read_bytes()
@@ -128,9 +238,21 @@ def _srt_files(directory: Path) -> Iterator[tuple[str, bytes]]:
 
 
 def _srt_subtitles(text: str) -> list[str]:
-    """El texto de cada subtítulo de un .srt, limpio. Saca el número y el tiempo de cada
-    bloque, los guiones de diálogo y las canciones (líneas con ♪, que no tienen la
-    puntuación del habla)"""
+    """Extrae el texto limpio de cada subtítulo de un .srt.
+
+    Saca el número y el tiempo de cada bloque, los guiones de diálogo y las canciones
+    (líneas con ♪, que no tienen la puntuación del habla).
+
+    Parameters
+    ----------
+    text : str
+        Contenido decodificado del .srt.
+
+    Returns
+    -------
+    list[str]
+        El texto de cada subtítulo no vacío, en orden.
+    """
     subtitles = []
     for block in re.split(r"\n\s*\n", text.replace("\r", "")):
         lines = [
@@ -145,10 +267,27 @@ def _srt_subtitles(text: str) -> list[str]:
 
 
 def _join_subtitles(subtitles: list[str]) -> str:
-    """Une los subtítulos en un texto continuo. Unos puntos suspensivos al final de un
-    subtítulo que sigue en minúscula (o al principio del que sigue) solo indican que la
-    oración continúa en el próximo subtítulo, así que se sacan: si no, la palabra quedaría
-    etiquetada con punto. Ej: "vendo mi departamento..." + "que al final" """
+    """Une los subtítulos en un texto continuo.
+
+    Unos puntos suspensivos al final de un subtítulo que sigue en minúscula (o al
+    principio del que sigue) solo indican que la oración continúa en el próximo
+    subtítulo, así que se sacan: si no, la palabra quedaría etiquetada con punto.
+
+    Parameters
+    ----------
+    subtitles : list[str]
+        Texto de cada subtítulo, en orden.
+
+    Returns
+    -------
+    str
+        Los subtítulos unidos con espacios.
+
+    Examples
+    --------
+    >>> _join_subtitles(["vendo mi departamento...", "que al final"])
+    'vendo mi departamento que al final'
+    """
     joined = []
     for i, subtitle in enumerate(subtitles):
         following = subtitles[i + 1] if i + 1 < len(subtitles) else ""
@@ -162,8 +301,20 @@ def _join_subtitles(subtitles: list[str]) -> str:
 
 
 def read_srt(directory: str | Path) -> list[Document]:
-    """Carpeta con subtítulos .srt, sueltos o en .zip (también en subcarpetas). Cada archivo
-    es un documento; los archivos con el mismo contenido se leen una sola vez"""
+    """Lee una carpeta con subtítulos .srt, sueltos o en .zip (también en subcarpetas).
+
+    Cada archivo es un documento; los archivos con el mismo contenido se leen una sola vez.
+
+    Parameters
+    ----------
+    directory : str or Path
+        Carpeta con los subtítulos.
+
+    Returns
+    -------
+    list[Document]
+        Un documento por archivo distinto, separado en oraciones.
+    """
     documents, seen = [], set()
     for _, raw in _srt_files(Path(directory)):
         digest = hashlib.sha256(raw).hexdigest()

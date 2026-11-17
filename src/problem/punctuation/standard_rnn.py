@@ -43,7 +43,7 @@ class PunctuationRNN(nn.Module):
         self,
         input_dim: int = EMBEDDING_DIM,
         hidden_dim: int = HIDDEN_DIM,
-    ):
+    ) -> None:
         super().__init__()
         # Tronco común de la red recurrente
         self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True)

@@ -34,13 +34,33 @@ SEQUENTIAL = LinearSegmentedColormap.from_list("blues", ["#eef4fc", "#cde2fb", "
 
 
 def _finish(fig: plt.Figure, title: str) -> None:
-    """Título general arriba a la izquierda, con su propio espacio para no pisar los paneles"""
+    """Pone el título general arriba a la izquierda, con su propio espacio para no pisar los paneles.
+
+    Parameters
+    ----------
+    fig : plt.Figure
+        Figura a terminar.
+    title : str
+        Título general.
+    """
     fig.suptitle(title, x=0.01, ha="left", fontsize=13, color=TEXT_PRIMARY)
     fig.tight_layout(rect=(0, 0, 1, 1 - 0.45 / fig.get_figheight()))
 
 
 def _style_axes(ax: Axes, title: str, epochs: list[int], unit_range: bool) -> None:
-    """Ejes y grilla discretos; el título del panel nombra la medida"""
+    """Aplica ejes y grilla discretos; el título del panel nombra la medida.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel a estilizar.
+    title : str
+        Título del panel.
+    epochs : list[int]
+        Marcas del eje x.
+    unit_range : bool
+        Si el eje y va de 0 a 1 (métricas) o es libre (loss).
+    """
     ax.set_title(title, loc="left", fontsize=11, color=TEXT_PRIMARY)
     ax.set_xlabel("época", color=TEXT_SECONDARY)
     ax.set_xticks(epochs)
@@ -56,24 +76,77 @@ def _style_axes(ax: Axes, title: str, epochs: list[int], unit_range: bool) -> No
 
 
 def _plot_line(ax: Axes, epochs: list[int], values: Sequence[float], color: str, **kwargs) -> None:
+    """Dibuja una serie con línea y marcadores.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde se dibuja.
+    epochs : list[int]
+        Valores del eje x.
+    values : Sequence[float]
+        Valores del eje y.
+    color : str
+        Color de la serie.
+    **kwargs
+        Otros argumentos de ``Axes.plot`` (``label``, ``linestyle``, etc.).
+    """
     ax.plot(epochs, values, color=color, linewidth=2, marker="o", markersize=5, **kwargs)
 
 
 def _plot_train_test(
     ax: Axes, epochs: list[int], train: Sequence[float], test: Sequence[float], color: str, label: str
 ) -> None:
-    """Train con línea llena y test con línea punteada, del mismo color"""
+    """Dibuja train con línea llena y test con línea punteada, del mismo color.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde se dibuja.
+    epochs : list[int]
+        Número de cada época.
+    train : Sequence[float]
+        Valores sobre train.
+    test : Sequence[float]
+        Valores sobre test.
+    color : str
+        Color de las dos series.
+    label : str
+        Nombre de la medida en la leyenda.
+    """
     _plot_line(ax, epochs, train, color, label=f"{label} · train")
     _plot_line(ax, epochs, test, color, linestyle="--", markerfacecolor=SURFACE, label=f"{label} · test")
 
 
 def _plot_loss(ax: Axes, history: list[EpochMetrics], epochs: list[int]) -> None:
+    """Dibuja la loss promedio de train y test de cada época.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde se dibuja.
+    history : list[EpochMetrics]
+        Métricas de cada época.
+    epochs : list[int]
+        Número de cada época (eje x).
+    """
     _plot_train_test(ax, epochs, [m.loss for m in history], [m.test_loss for m in history], SERIES_COLORS[0], "loss")
     _style_axes(ax, "Loss promedio: train (—) y test (--)", epochs, unit_range=False)
     ax.legend(frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(1.01, 1))
 
 
 def _plot_scores(ax: Axes, history: list[EpochMetrics], epochs: list[int]) -> None:
+    """Dibuja el F1 macro de train y test de cada tarea en cada época.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde se dibuja.
+    history : list[EpochMetrics]
+        Métricas de cada época.
+    epochs : list[int]
+        Número de cada época (eje x).
+    """
     for i, task in enumerate(history[0].score):
         _plot_train_test(
             ax, epochs, [m.score[task] for m in history], [m.test_score[task] for m in history], SERIES_COLORS[i], task
@@ -83,7 +156,19 @@ def _plot_scores(ax: Axes, history: list[EpochMetrics], epochs: list[int]) -> No
 
 
 def _plot_precision_recall(ax: Axes, history: list[EpochMetrics], epochs: list[int], task: str) -> None:
-    """Un color por clase; precision con línea llena y recall con línea punteada"""
+    """Dibuja la precision (línea llena) y el recall (punteada) de cada clase sobre train, un color por clase.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde se dibuja.
+    history : list[EpochMetrics]
+        Métricas de cada época.
+    epochs : list[int]
+        Número de cada época (eje x).
+    task : str
+        Tarea a dibujar.
+    """
     for c in history[0].per_class[task]:
         color = SERIES_COLORS[c]
         name = class_name(task, c)
@@ -102,8 +187,19 @@ def _plot_precision_recall(ax: Axes, history: list[EpochMetrics], epochs: list[i
 
 
 def save_training_plot(history: list[EpochMetrics], path: Path, title: str, best_epoch: int | None = None) -> None:
-    """Guarda un PNG con la evolución de la loss y las métricas de cada época. Si se indica
-    `best_epoch` (la época con la que se quedó la red), la marca con una línea punteada"""
+    """Guarda un PNG con la evolución de la loss y las métricas de cada época.
+
+    Parameters
+    ----------
+    history : list[EpochMetrics]
+        Métricas de cada época.
+    path : Path
+        Archivo de salida.
+    title : str
+        Título general.
+    best_epoch : int or None, default=None
+        Época con la que se quedó la red; si se indica, se marca con una línea punteada.
+    """
     epochs = [m.epoch for m in history]
     tasks = list(history[0].per_class)
     fig, axes = plt.subplots(2 + len(tasks), 1, figsize=(9, 3 * (2 + len(tasks))), facecolor=SURFACE)
@@ -121,7 +217,17 @@ def save_training_plot(history: list[EpochMetrics], path: Path, title: str, best
 
 
 def _plot_class_bars(ax: Axes, task: str, classes: Mapping[int, tuple[float, float]]) -> None:
-    """Precision y recall de cada clase, una al lado de la otra, con su valor arriba"""
+    """Dibuja la precision y el recall de cada clase, una al lado de la otra, con su valor arriba.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde se dibuja.
+    task : str
+        Tarea a dibujar.
+    classes : Mapping[int, tuple[float, float]]
+        ``(precision, recall)`` de cada clase.
+    """
     x = np.arange(len(classes))
     width = 0.38
     for offset, idx, label in ((-width / 2, 0, "precision"), (width / 2, 1, "recall")):
@@ -136,7 +242,17 @@ def _plot_class_bars(ax: Axes, task: str, classes: Mapping[int, tuple[float, flo
 
 
 def save_class_metrics_plot(per_class: PerClass, path: Path, title: str) -> None:
-    """Guarda un PNG con la precision y el recall de cada clase, un panel por tarea"""
+    """Guarda un PNG con la precision y el recall de cada clase, un panel por tarea.
+
+    Parameters
+    ----------
+    per_class : PerClass
+        Por tarea, ``(precision, recall)`` de cada clase.
+    path : Path
+        Archivo de salida.
+    title : str
+        Título general.
+    """
     tasks = list(per_class)
     fig, axes = plt.subplots(len(tasks), 1, figsize=(9, 3.4 * len(tasks)), facecolor=SURFACE, squeeze=False)
     for ax, task in zip(axes[:, 0], tasks):
@@ -147,14 +263,45 @@ def save_class_metrics_plot(per_class: PerClass, path: Path, title: str) -> None
 
 
 def _plot_confusion(ax: Axes, title: str, task: str, real: np.ndarray, pred: np.ndarray, n_classes: int) -> None:
+    """Dibuja la matriz de confusión de una tarea a partir de las etiquetas.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde se dibuja.
+    title : str
+        Título del panel.
+    task : str
+        Tarea, para los nombres de las clases.
+    real : np.ndarray
+        Etiquetas reales a nivel palabra.
+    pred : np.ndarray
+        Clases predichas a nivel palabra.
+    n_classes : int
+        Cantidad de clases de la tarea.
+    """
     plot_confusion_counts(ax, title, task, confusion_matrix(real, pred, labels=range(n_classes)))
 
 
 def plot_confusion_counts(ax: Axes, title: str, task: str, counts: np.ndarray, names: list[str] | None = None) -> None:
-    """Matriz normalizada por fila: cada fila muestra a dónde fueron las palabras de esa clase
-    real (la diagonal es el recall). Cada celda indica el porcentaje y la cantidad.
-    counts: (n_clases, n_clases), fila = clase real, columna = clase predicha
-    names: nombre de cada clase (por defecto, los de class_name)"""
+    """Dibuja una matriz de confusión normalizada por fila.
+
+    Cada fila muestra a dónde fueron las palabras de esa clase real (la diagonal es el
+    recall). Cada celda indica el porcentaje y la cantidad.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde se dibuja.
+    title : str
+        Título del panel.
+    task : str
+        Tarea, para los nombres de las clases por defecto.
+    counts : np.ndarray of shape (n_clases, n_clases)
+        Fila = clase real, columna = clase predicha.
+    names : list[str] or None, default=None
+        Nombre de cada clase; por defecto, los de ``class_name``.
+    """
     counts = np.asarray(counts)
     n_classes = len(counts)
     rates = counts / np.maximum(counts.sum(axis=1, keepdims=True), 1)
@@ -180,7 +327,19 @@ def plot_confusion_counts(ax: Axes, title: str, task: str, counts: np.ndarray, n
 
 
 def save_confusion_matrices(results: Mapping[str, TrainResult], path: Path, title: str) -> None:
-    """Guarda un PNG con una fila por modelo y una columna por tarea"""
+    """Guarda un PNG con las matrices de confusión, una fila por modelo y una columna por tarea.
+
+    Los modelos sin tareas evaluadas se saltean; si no queda ninguno no guarda nada.
+
+    Parameters
+    ----------
+    results : Mapping[str, TrainResult]
+        Resultado de cada modelo, por nombre.
+    path : Path
+        Archivo de salida.
+    title : str
+        Título general.
+    """
     evaluated = {name: result for name, result in results.items() if result.test_tasks}
     if not evaluated:
         return

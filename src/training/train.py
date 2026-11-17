@@ -8,6 +8,7 @@ import joblib
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+# Algunos imports solo los usan los experimentos comentados en build_experiments
 from src.constants import MODELS_DIR, RUN_SEPARATOR
 from src.data import build_loader, split_train_test
 from src.features import (
@@ -34,8 +35,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class Experiment:
-    """Un modelo a entrenar junto con el extractor de features que recibe y cómo predecir
-    con él una vez entrenado (para evaluarlo sobre control)"""
+    """Un modelo a entrenar, el extractor de features que recibe y cómo predecir con él una vez entrenado.
+
+    Attributes
+    ----------
+    name : str
+        Nombre del experimento, con el que se guarda el modelo.
+    trainer : Callable[[DataLoader, DataLoader, TextFeatureExtractor, Problem], TrainResult]
+        Entrena el modelo sobre train y lo evalúa sobre test.
+    evaluator : Evaluator
+        Predice con el modelo ya entrenado (para evaluarlo sobre control).
+    feature_extractor : TextFeatureExtractor
+        Extractor de features que recibe el modelo.
+    """
 
     name: str
     trainer: Callable[[DataLoader, DataLoader, TextFeatureExtractor, Problem], TrainResult]
@@ -44,7 +56,13 @@ class Experiment:
 
 
 def build_experiments() -> list[Experiment]:
-    """Define las combinaciones de modelo y features que pide el enunciado"""
+    """Define las combinaciones de modelo y features que pide el enunciado.
+
+    Returns
+    -------
+    list[Experiment]
+        Los experimentos activos, en el orden en que se entrenan.
+    """
     embeddings = EmbeddingsExtractor()
     return [
         # Experiment("classic_features", train_classic_model, evaluate_classic_model, ClassicFeatureExtractor()),
@@ -114,35 +132,100 @@ def build_experiments() -> list[Experiment]:
 
 
 def create_run_directory() -> Path:
-    """Carpeta propia de esta ejecución del pipeline: models/<día>__<hora>.
-    Ej: 'models/2026-11-12__19-30-05'. Adentro, una carpeta por problema"""
+    """Crea la carpeta propia de esta ejecución del pipeline: ``models/<día>__<hora>``.
+
+    Adentro va una carpeta por problema.
+
+    Returns
+    -------
+    Path
+        Ej: ``models/2026-11-12__19-30-05``.
+    """
     run_dir = Path(MODELS_DIR) / datetime.now().strftime(f"%Y-%m-%d{RUN_SEPARATOR}%H-%M-%S")
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir
 
 
 def problem_dir(run_dir: Path, problem: Problem) -> Path:
-    """Carpeta del problema dentro de la ejecución. Ej: 'models/2026-11-12__19-30-05/PunctuationProblem'"""
+    """Crea la carpeta del problema dentro de la ejecución.
+
+    Parameters
+    ----------
+    run_dir : Path
+        Carpeta de la ejecución.
+    problem : Problem
+        Problema; la carpeta se llama como su clase.
+
+    Returns
+    -------
+    Path
+        Ej: ``models/2026-11-12__19-30-05/PunctuationProblem``.
+    """
     model_dir = run_dir / problem.__class__.__name__
     model_dir.mkdir(parents=True, exist_ok=True)
     return model_dir
 
 
 def _file_stem(model_dir: Path, name: str, result: TrainResult) -> Path:
-    """<score>__<modelo>, con el score como el promedio del F1 macro de sus tareas.
-    Así, ordenados por nombre, los mejores modelos de la ejecución quedan al final. No usar
-    with_suffix sobre el resultado: tomaría el punto del score como extensión"""
+    """Arma el nombre base del modelo: ``<score>__<modelo>``.
+
+    El score es el promedio del F1 macro de sus tareas. Así, ordenados por nombre, los
+    mejores modelos de la ejecución quedan al final. No usar ``with_suffix`` sobre el
+    resultado: tomaría el punto del score como extensión.
+
+    Parameters
+    ----------
+    model_dir : Path
+        Carpeta del problema.
+    name : str
+        Nombre del experimento.
+    result : TrainResult
+        Resultado del entrenamiento.
+
+    Returns
+    -------
+    Path
+        Path sin extensión, ej: ``.../0.812__standard_rnn``.
+    """
     return model_dir / RUN_SEPARATOR.join((f"{mean_score(result.score):.3f}", name))
 
 
 def _with_ext(file_stem: Path, extension: str) -> Path:
+    """Agrega una extensión al nombre base sin interpretar el punto del score.
+
+    Parameters
+    ----------
+    file_stem : Path
+        Path sin extensión (ver ``_file_stem``).
+    extension : str
+        Extensión con el punto, ej: ``".pkl"``.
+
+    Returns
+    -------
+    Path
+        El path con la extensión agregada.
+    """
     return file_stem.with_name(file_stem.name + extension)
 
 
 def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_name: str) -> None:
-    """Guarda el modelo entrenado y su gráfico. Las redes guardan sus pesos (.pkl) y los
-    modelos clásicos el objeto completo (.joblib). El gráfico es la evolución por época si
-    entrena por épocas, o la precision/recall por clase sobre test si no (modelos clásicos)"""
+    """Guarda el modelo entrenado y su gráfico.
+
+    Las redes guardan sus pesos (.pkl) y los modelos clásicos el objeto completo
+    (.joblib). El gráfico es la evolución por época si entrena por épocas, o la
+    precision/recall por clase sobre test si no (modelos clásicos).
+
+    Parameters
+    ----------
+    name : str
+        Nombre del experimento.
+    result : TrainResult
+        Resultado del entrenamiento.
+    file_stem : Path
+        Path sin extensión donde se guardan los archivos.
+    problem_name : str
+        Nombre del problema, para el título del gráfico.
+    """
     if isinstance(result.model, torch.nn.Module):
         torch.save(result.model.state_dict(), _with_ext(file_stem, ".pkl"))
     elif result.model is not None:
@@ -158,10 +241,26 @@ def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_na
 def train_models(
     development_dataset: Dataset, experiments: list[Experiment], problem: Problem, model_dir: Path
 ) -> dict[str, TrainResult]:
-    """
-    Acá se entrena y devuelve TODOS los modelos para el dataset dado, guardándolos en model_dir.
-    Inicialmente probamos los mismos modelos para ambos problemas.
-    Al final guarda las matrices de confusión sobre test de todos los modelos.
+    """Entrena todos los experimentos sobre el dataset de desarrollo y los guarda en ``model_dir``.
+
+    Divide el desarrollo en train y test, entrena cada experimento y al final guarda las
+    matrices de confusión sobre test de todos los modelos.
+
+    Parameters
+    ----------
+    development_dataset : Dataset
+        Dataset de desarrollo del problema.
+    experiments : list[Experiment]
+        Experimentos a entrenar.
+    problem : Problem
+        Problema a resolver.
+    model_dir : Path
+        Carpeta del problema dentro de la ejecución.
+
+    Returns
+    -------
+    dict[str, TrainResult]
+        Resultado de cada experimento, por nombre.
     """
     train_dataset, test_dataset = split_train_test(development_dataset)
     logger.info("Split: train=%d, test=%d", len(train_dataset), len(test_dataset))
@@ -186,9 +285,28 @@ def train_models(
 def evaluate_on_control(
     control_dataset: Dataset, experiment: Experiment, result: TrainResult, problem: Problem, model_dir: Path
 ) -> TrainResult:
-    """Evalúa sobre control el modelo ya entrenado del experimento. Devuelve un TrainResult
-    cuyas tareas son las de control, y guarda en model_dir su precision/recall por clase y
-    sus matrices de confusión"""
+    """Evalúa sobre control el modelo ya entrenado del experimento.
+
+    Guarda en ``model_dir`` su precision/recall por clase y sus matrices de confusión.
+
+    Parameters
+    ----------
+    control_dataset : Dataset
+        Dataset de control del problema.
+    experiment : Experiment
+        Experimento del modelo.
+    result : TrainResult
+        Resultado del entrenamiento, con el modelo.
+    problem : Problem
+        Problema del modelo.
+    model_dir : Path
+        Carpeta del problema dentro de la ejecución.
+
+    Returns
+    -------
+    TrainResult
+        Resultado cuyas tareas son las de control.
+    """
     loader = build_loader(control_dataset, shuffle=False)
     control = TrainResult(
         result.model, experiment.evaluator(result.model, loader, experiment.feature_extractor, problem)

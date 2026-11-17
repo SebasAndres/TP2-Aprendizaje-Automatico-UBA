@@ -20,24 +20,12 @@ si antes terminó una oración. Cada una cambia una idea respecto de `bidirectio
   piezas de la misma palabra ("pre", "##gun", "##ta"). Después la BiLSTM lee la oración.
 """
 
-from src.problem.joint.conv_bilstm import ConvBiLSTM, create_conv_bilstm_model
-from src.problem.joint.projected_bigru import ProjectedBiGRU, create_projected_bigru_model
-from src.problem.joint.residual_stacked_bilstm import ResidualStackedBiLSTM, create_residual_stacked_bilstm_model
-from src.problem.joint.rnn import (
-    JointLSTM,
-    JointRNN,
-    create_joint_lstm_model,
-    create_joint_model,
-    create_joint_rnn_model,
-    joint_model_name,
-)
+from src.problem.joint.conv_bilstm import create_conv_bilstm_model
+from src.problem.joint.projected_bigru import create_projected_bigru_model
+from src.problem.joint.residual_stacked_bilstm import create_residual_stacked_bilstm_model
+from src.problem.joint.rnn import create_joint_lstm_model, create_joint_model, create_joint_rnn_model, joint_model_name
 
 __all__ = [
-    "JointRNN",
-    "JointLSTM",
-    "ProjectedBiGRU",
-    "ResidualStackedBiLSTM",
-    "ConvBiLSTM",
     "create_joint_rnn_model",
     "create_joint_lstm_model",
     "create_joint_model",

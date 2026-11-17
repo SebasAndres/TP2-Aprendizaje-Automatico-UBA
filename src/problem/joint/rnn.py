@@ -69,7 +69,7 @@ class JointRNN(nn.Module):
         input_dim: int = EMBEDDING_DIM,
         hidden_dim: int = HIDDEN_DIM,
         bidirectional: bool = False,
-    ):
+    ) -> None:
         super().__init__()
         # Parte compartida: lee la oración y construye el estado oculto h_t de cada token
         self.rnn = self._recurrent_layer(input_dim, hidden_dim, bidirectional)
@@ -81,6 +81,22 @@ class JointRNN(nn.Module):
 
     @staticmethod
     def _recurrent_layer(input_dim: int, hidden_dim: int, bidirectional: bool) -> nn.Module:
+        """Crea la capa recurrente compartida: una RNN simple.
+
+        Parameters
+        ----------
+        input_dim : int
+            Dimensión del embedding de cada token.
+        hidden_dim : int
+            Dimensión del estado oculto de cada dirección.
+        bidirectional : bool
+            Si lee la instancia en las dos direcciones.
+
+        Returns
+        -------
+        torch.nn.Module
+            Una ``nn.RNN`` con ``batch_first=True``.
+        """
         return nn.RNN(input_dim, hidden_dim, batch_first=True, bidirectional=bidirectional)
 
     def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
@@ -133,6 +149,22 @@ class JointLSTM(JointRNN):
 
     @staticmethod
     def _recurrent_layer(input_dim: int, hidden_dim: int, bidirectional: bool) -> nn.Module:
+        """Crea la capa recurrente compartida: una LSTM.
+
+        Parameters
+        ----------
+        input_dim : int
+            Dimensión del embedding de cada token.
+        hidden_dim : int
+            Dimensión del estado oculto de cada dirección.
+        bidirectional : bool
+            Si lee la instancia en las dos direcciones.
+
+        Returns
+        -------
+        torch.nn.Module
+            Una ``nn.LSTM`` con ``batch_first=True``.
+        """
         return nn.LSTM(input_dim, hidden_dim, batch_first=True, bidirectional=bidirectional)
 
 
@@ -189,5 +221,18 @@ def create_joint_model(bidirectional: bool = False, lstm: bool = False) -> Joint
 
 
 def joint_model_name(bidirectional: bool = False, lstm: bool = False) -> str:
-    """Nombre del experimento, con el que se guarda el archivo. Ej: 'bidirectional_joint_lstm'"""
+    """Arma el nombre del experimento, con el que se guarda el archivo.
+
+    Parameters
+    ----------
+    bidirectional : bool, default=False
+        Si la red lee en las dos direcciones.
+    lstm : bool, default=False
+        Si usa celdas LSTM.
+
+    Returns
+    -------
+    str
+        Ej: ``'bidirectional_joint_lstm'``.
+    """
     return ("bidirectional_" if bidirectional else "") + ("joint_lstm" if lstm else "joint_rnn")

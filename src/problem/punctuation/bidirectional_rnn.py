@@ -48,7 +48,7 @@ class PunctuationBidirectionalRNN(nn.Module):
         input_dim: int = EMBEDDING_DIM,
         hidden_dim: int = HIDDEN_DIM,
         dropout: float = 0.0,
-    ):
+    ) -> None:
         super().__init__()
         # 1. Activamos la lectura en ambas direcciones
         self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True, bidirectional=True)

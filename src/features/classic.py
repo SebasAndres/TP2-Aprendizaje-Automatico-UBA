@@ -39,7 +39,21 @@ CONTEXT_WORDS = 2
 
 
 def _word_features(word: str, n_tokens: int) -> list[float]:
-    """Atributos de la palabra según su texto"""
+    """Calcula los atributos propios de la palabra según su texto.
+
+    Parameters
+    ----------
+    word : str
+        Palabra normalizada (tokens unidos, ver ``split_words``).
+    n_tokens : int
+        Cantidad de tokens BERT de la palabra.
+
+    Returns
+    -------
+    list[float]
+        Largo, vocales, consonantes, proporción de vocales, acentos, cantidad de
+        tokens, si es interrogativa, si tiene dígitos y si tiene signos o dígitos.
+    """
     length = len(word)
     num_vowels = sum(char in VOCALES for char in word)
     return [
@@ -56,14 +70,40 @@ def _word_features(word: str, n_tokens: int) -> list[float]:
 
 
 def _position_features(n_words: int) -> torch.Tensor:
-    """(n_palabras, 3): es la primera, es la última, posición relativa entre 0 y 1"""
+    """Calcula los atributos de posición de cada palabra en la instancia.
+
+    Parameters
+    ----------
+    n_words : int
+        Cantidad de palabras de la instancia.
+
+    Returns
+    -------
+    torch.Tensor of shape (n_words, 3)
+        Es la primera, es la última y posición relativa entre 0 y 1.
+    """
     position = torch.arange(n_words, dtype=torch.float32)
     return torch.stack([position == 0, position == n_words - 1, position / max(n_words - 1, 1)], dim=1).float()
 
 
 def _context_features(own: torch.Tensor, context: int) -> torch.Tensor:
-    """Los atributos de las `context` palabras anteriores y siguientes de cada palabra, con
-    ceros fuera de la instancia. (n_palabras, n_atributos) -> (n_palabras, 2 * context * n_atributos)"""
+    """Junta los atributos de las ``context`` palabras anteriores y siguientes de cada palabra.
+
+    Las posiciones fuera de la instancia se completan con ceros.
+
+    Parameters
+    ----------
+    own : torch.Tensor of shape (n_palabras, n_atributos)
+        Atributos propios de cada palabra.
+    context : int
+        Cuántas palabras de cada lado se agregan.
+
+    Returns
+    -------
+    torch.Tensor of shape (n_palabras, 2 * context * n_atributos)
+        Los atributos de los vecinos, de la palabra más lejana a la izquierda a la más
+        lejana a la derecha.
+    """
     n_words = own.size(0)
     padded = F.pad(own, (0, 0, context, context))  # filas de ceros arriba y abajo
     offsets = [offset for offset in range(-context, context + 1) if offset != 0]
@@ -71,10 +111,21 @@ def _context_features(own: torch.Tensor, context: int) -> torch.Tensor:
 
 
 class ClassicFeatureExtractor(TextFeatureExtractor):
-    """Feature Extractor sin embeddings"""
+    """Feature extractor sin embeddings: atributos de la palabra, su posición y su contexto."""
 
     def extract_words(self, tokens: list[str]) -> torch.Tensor:
-        """Devuelve un tensor (n_palabras, n_features): atributos propios, posición y contexto"""
+        """Calcula las features de cada palabra.
+
+        Parameters
+        ----------
+        tokens : list[str]
+            Tokens BERT de una instancia.
+
+        Returns
+        -------
+        torch.Tensor of shape (n_palabras, n_features)
+            Atributos propios, de posición y de las ``CONTEXT_WORDS`` palabras de cada lado.
+        """
         n_tokens = np.bincount(token_word_ids(tokens))
         own = torch.tensor(
             [_word_features(word, n) for word, n in zip(split_words(tokens), n_tokens)], dtype=torch.float32
@@ -82,5 +133,16 @@ class ClassicFeatureExtractor(TextFeatureExtractor):
         return torch.cat([own, _position_features(own.size(0)), _context_features(own, CONTEXT_WORDS)], dim=1)
 
     def extract(self, tokens: list[str]) -> torch.Tensor:
-        """Devuelve un tensor (n_tokens, n_features): cada token con los atributos de su palabra"""
+        """Calcula las features de cada token: las de su palabra.
+
+        Parameters
+        ----------
+        tokens : list[str]
+            Tokens BERT de una instancia.
+
+        Returns
+        -------
+        torch.Tensor of shape (n_tokens, n_features)
+            Cada token con los atributos de su palabra.
+        """
         return self.extract_words(tokens)[torch.from_numpy(token_word_ids(tokens))]

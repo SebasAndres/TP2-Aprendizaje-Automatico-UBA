@@ -15,7 +15,23 @@ N_CAPITALIZATION_CLASSES = len(CAPITALIZATION_NAMES)
 
 
 def word_capitalization(word: str) -> Capitalization:
-    """Clasifica la capitalización de una palabra considerando solo sus letras"""
+    """Clasifica la capitalización de una palabra considerando solo sus letras.
+
+    Parameters
+    ----------
+    word : str
+        Palabra sin puntuación en los bordes.
+
+    Returns
+    -------
+    Capitalization
+        ``LOWERCASE``, ``TITLE``, ``MIXED`` o ``UPPERCASE``.
+
+    Examples
+    --------
+    >>> word_capitalization("UBA"), word_capitalization("McDonald's")
+    (3, 2)
+    """
     letters = [char for char in word if char.isalpha()]
     if not any(char.isupper() for char in letters):
         return LOWERCASE
@@ -27,21 +43,38 @@ def word_capitalization(word: str) -> Capitalization:
 
 
 class CapitalizationDataset(TextDataset):
+    """Dataset del problema de capitalización: una clase por token (ver ``TextDataset``)."""
+
     def _expected_output(self, words: list[str], word_tokens: list[list[str]]) -> torch.Tensor:
         """Asigna la capitalización de cada palabra a todos sus tokens.
 
-        Devuelve un tensor (n_tokens,) con un valor por token:
-            0 = LOWERCASE, 1 = TITLE, 2 = MIXED, 3 = UPPERCASE
+        Parameters
+        ----------
+        words : list[str]
+            Palabras originales de la instancia.
+        word_tokens : list[list[str]]
+            Tokens de cada palabra normalizada.
 
-        Ejemplo: "¿Cuándo vamos a McDonald's? Ellos"
+        Returns
+        -------
+        torch.Tensor of shape (n_tokens,)
+            Un valor por token: 0 = LOWERCASE, 1 = TITLE, 2 = MIXED, 3 = UPPERCASE.
+
+        Notes
+        -----
+        Para reconstruir una palabra hay que juntar sus tokens (los ``"##"`` continúan
+        la anterior) y aplicar la clase de la palabra: 1 -> ``capitalize()``,
+        3 -> ``upper()``. La clase 2 no dice qué letras van en mayúscula (ej:
+        "McDonald's"), así que no se puede reconstruir solo con ``y``.
+
+        Examples
+        --------
+        "¿Cuándo vamos a McDonald's? Ellos"::
+
             tokens: cu  ##ánd  ##o  va  ##mos  a  m  ##c  ##dona  ##ld  '  s  ellos
             y:      1   1      1    0   0      0  2  2    2       2     2  2  1
 
-        Ejemplo: "Hola, la UBA" -> hol, ##a, la, u, ##ba -> [1, 1, 0, 3, 3]
-
-        Para reconstruir una palabra hay que juntar sus tokens (los "##" continúan la anterior)
-        y aplicar la clase de la palabra: 1 -> capitalize(), 3 -> upper(). La clase 2 no dice
-        qué letras van en mayúscula (ej: "McDonald's"), así que no se puede reconstruir solo con y.
+        "Hola, la UBA" -> hol, ##a, la, u, ##ba -> [1, 1, 0, 3, 3]
         """
         labels = [
             word_capitalization(strip_punctuation(word)) for word, tokens in zip(words, word_tokens) for _ in tokens

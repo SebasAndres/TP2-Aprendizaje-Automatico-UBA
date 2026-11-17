@@ -47,20 +47,20 @@ def build_experiments() -> list[Experiment]:
     """Define las combinaciones de modelo y features que pide el enunciado"""
     embeddings = EmbeddingsExtractor()
     return [
-        Experiment("classic_features", train_classic_model, evaluate_classic_model, ClassicFeatureExtractor()),
-        Experiment(
-            "classic_features_dictionary",
-            classic_trainer(use_dictionary=True),
-            evaluate_classic_model,
-            ClassicFeatureExtractor(),
-        ),
-        Experiment("classic_embeddings", train_classic_model, evaluate_classic_model, AverageEmbeddingsExtractor()),
-        Experiment(
-            "standard_rnn",
-            neural_trainer(lambda problem: problem.standard_rnn_model()),
-            evaluate_problem_network,
-            embeddings,
-        ),
+        # Experiment("classic_features", train_classic_model, evaluate_classic_model, ClassicFeatureExtractor()),
+        # Experiment(
+        #     "classic_features_dictionary",
+        #     classic_trainer(use_dictionary=True),
+        #     evaluate_classic_model,
+        #     ClassicFeatureExtractor(),
+        # ),
+        # Experiment("classic_embeddings", train_classic_model, evaluate_classic_model, AverageEmbeddingsExtractor()),
+        # Experiment(
+        #     "standard_rnn",
+        #     neural_trainer(lambda problem: problem.standard_rnn_model()),
+        #     evaluate_problem_network,
+        #     embeddings,
+        # ),
         Experiment(
             "bidirectional_rnn",
             neural_trainer(
@@ -70,41 +70,46 @@ def build_experiments() -> list[Experiment]:
             evaluate_problem_network,
             embeddings,
         ),
+        # Experiment(
+        #     "joint_rnn",
+        #     joint_trainer(lambda: create_joint_model(bidirectional=False)),
+        #     evaluate_joint_model,
+        #     embeddings,
+        # ),
+        # Experiment(
+        #     "bidirectional_joint_rnn",
+        #     joint_trainer(lambda: create_joint_model(bidirectional=True)),
+        #     evaluate_joint_model,
+        #     embeddings,
+        # ),
+        # Experiment(
+        #     "joint_lstm",
+        #     joint_trainer(lambda: create_joint_model(bidirectional=False, lstm=True)),
+        #     evaluate_joint_model,
+        #     embeddings,
+        # ),
+        # Experiment(
+        #     "bidirectional_joint_lstm",
+        #     joint_trainer(lambda: create_joint_model(bidirectional=True, lstm=True)),
+        #     evaluate_joint_model,
+        #     embeddings,
+        # ),
+        # # Variantes de la red conjunta, ver src/problem/joint/
+        # Experiment(
+        #     "joint_projected_bigru", joint_trainer(create_projected_bigru_model), evaluate_joint_model, embeddings
+        # ),
+        # Experiment(
+        #     "joint_residual_stacked_bilstm",
+        #     joint_trainer(create_residual_stacked_bilstm_model),
+        #     evaluate_joint_model,
+        #     embeddings,
+        # ),
         Experiment(
-            "joint_rnn",
-            joint_trainer(lambda: create_joint_model(bidirectional=False)),
-            evaluate_joint_model,
-            embeddings,
+            "joint_conv_bilstm", 
+            joint_trainer(create_conv_bilstm_model), 
+            evaluate_joint_model, 
+            embeddings
         ),
-        Experiment(
-            "bidirectional_joint_rnn",
-            joint_trainer(lambda: create_joint_model(bidirectional=True)),
-            evaluate_joint_model,
-            embeddings,
-        ),
-        Experiment(
-            "joint_lstm",
-            joint_trainer(lambda: create_joint_model(bidirectional=False, lstm=True)),
-            evaluate_joint_model,
-            embeddings,
-        ),
-        Experiment(
-            "bidirectional_joint_lstm",
-            joint_trainer(lambda: create_joint_model(bidirectional=True, lstm=True)),
-            evaluate_joint_model,
-            embeddings,
-        ),
-        # Variantes de la red conjunta, ver src/problem/joint/
-        Experiment(
-            "joint_projected_bigru", joint_trainer(create_projected_bigru_model), evaluate_joint_model, embeddings
-        ),
-        Experiment(
-            "joint_residual_stacked_bilstm",
-            joint_trainer(create_residual_stacked_bilstm_model),
-            evaluate_joint_model,
-            embeddings,
-        ),
-        Experiment("joint_conv_bilstm", joint_trainer(create_conv_bilstm_model), evaluate_joint_model, embeddings),
     ]
 
 

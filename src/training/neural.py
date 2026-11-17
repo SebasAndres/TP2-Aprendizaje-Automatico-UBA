@@ -39,6 +39,12 @@ logger = logging.getLogger(__name__)
 
 N_EPOCHS = 5
 LEARNING_RATE = 1e-3
+# Regularización L2 desacoplada (AdamW): en cada paso achica los pesos w <- w - lr * WEIGHT_DECAY * w,
+# aparte del paso de Adam. Con Adam(weight_decay=...) el término L2 pasaría por la escala
+# adaptativa y los pesos con gradientes grandes casi no se regularizarían.
+# 0 = igual a Adam. Es el valor de las redes que no eligen el suyo (ver neural_trainer); el de
+# bidirectional_rnn sale de notebooks/hyperparameters/regularization/regularization_weight_decay.ipynb
+WEIGHT_DECAY = 0.0
 # Norma máxima del gradiente en cada paso (None = sin recortar). En una RNN, backpropagation
 # through time multiplica muchas veces por W_h y el gradiente puede explotar en secuencias
 # largas; recortarlo evita que un solo batch desarme los pesos
@@ -248,19 +254,22 @@ def train_neural_model(
     model: nn.Module,
     n_epochs: int | None = None,
     class_weight_power: float = CLASS_WEIGHT_POWER,
+    weight_decay: float | None = None,
 ) -> TrainResult:
     """Entrena la red `n_epochs` épocas minimizando `metric.loss`, con cada clase pesada según
     su frecuencia en train (ver src/training/weights.py). Al final de cada época evalúa
     sobre test (loss y F1), para ver si sobreajusta. Se queda con los pesos de la época con
     mejor F1 en test (no necesariamente la última) y devuelve sus predicciones sobre test y
     las métricas de train y test de cada época. Sin `n_epochs` usa N_EPOCHS (el pipeline lo
-    cambia con --epochs)"""
+    cambia con --epochs) y sin `weight_decay`, WEIGHT_DECAY"""
     n_epochs = n_epochs or N_EPOCHS
+    weight_decay = WEIGHT_DECAY if weight_decay is None else weight_decay
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=weight_decay)
+    n_params = sum(p.numel() for p in model.parameters())
     logger.info(
-        "Entrenando %s en %s (%d parámetros)", type(model).__name__, device, sum(p.numel() for p in model.parameters())
+        "Entrenando %s en %s (%d parámetros, weight_decay=%g)", type(model).__name__, device, n_params, weight_decay
     )
 
     weights = class_weights(train_loader.dataset, class_weight_power)
@@ -327,8 +336,9 @@ def evaluate_problem_network(
     return evaluate_neural_model(model, loader, feature_extractor, problem.metric)
 
 
-def neural_trainer(build_model: ModelFactory) -> Trainer:
-    """Adapta `train_neural_model` a la firma de `Experiment.trainer`, fijando qué red entrenar.
+def neural_trainer(build_model: ModelFactory, weight_decay: Callable[[Problem], float] | None = None) -> Trainer:
+    """Adapta `train_neural_model` a la firma de `Experiment.trainer`, fijando qué red entrenar
+    y, opcionalmente, el weight decay de cada problema (sin `weight_decay`, WEIGHT_DECAY).
     Si el problema no implementa esa red, devuelve un resultado vacío"""
 
     def trainer(
@@ -339,6 +349,9 @@ def neural_trainer(build_model: ModelFactory) -> Trainer:
         except NotImplementedError as error:
             logger.warning("Red sin implementar para %s: %s", type(problem).__name__, error)
             return TrainResult(None)
-        return train_neural_model(train_loader, test_loader, feature_extractor, problem.metric, model)
+        decay = weight_decay(problem) if weight_decay else None
+        return train_neural_model(
+            train_loader, test_loader, feature_extractor, problem.metric, model, weight_decay=decay
+        )
 
     return trainer

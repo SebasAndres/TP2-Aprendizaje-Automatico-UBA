@@ -24,6 +24,9 @@ class CapitalizationBidirectionalRNN(nn.Module):
     n_classes : int, default=N_CAPITALIZATION_CLASSES
         Cantidad de clases de capitalización: 0 = minúscula, 1 = Inicial,
         2 = MiXta, 3 = MAYÚS.
+    dropout : float, default=0.0
+        Probabilidad de apagar cada valor de ``[h→_t ; h←_t]`` antes de las cabezas,
+        solo durante el entrenamiento (regularización). Con 0 no se apaga nada.
 
     Attributes
     ----------
@@ -42,10 +45,14 @@ class CapitalizationBidirectionalRNN(nn.Module):
         input_dim: int = EMBEDDING_DIM,
         hidden_dim: int = HIDDEN_DIM,
         n_classes: int = N_CAPITALIZATION_CLASSES,
+        dropout: float = 0.0,
     ):
         super().__init__()
         # 1. Activamos la lectura en ambas direcciones
         self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True, bidirectional=True)
+        # El dropout= de nn.RNN solo actúa entre capas apiladas: con una sola capa no haría
+        # nada, así que va como capa aparte sobre la salida de la RNN
+        self.dropout = nn.Dropout(dropout)
 
         # 2. Multiplicamos la entrada por 2 porque ahora concatena ambas memorias
         self.out = nn.Linear(hidden_dim * 2, n_classes)
@@ -71,14 +78,20 @@ class CapitalizationBidirectionalRNN(nn.Module):
         packed = pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
         h, _ = self.rnn(packed)
         h, _ = pad_packed_sequence(h, batch_first=True, total_length=x.size(1))
+        h = self.dropout(h)  # en model.eval() no apaga nada
         return self.out(h)
 
 
-def create_bidirectional_rnn_model() -> CapitalizationBidirectionalRNN:
+def create_bidirectional_rnn_model(dropout: float = 0.0) -> CapitalizationBidirectionalRNN:
     """Crea la RNN bidireccional de capitalización, sin entrenar.
 
     Fija la semilla antes de construirla para que todas las corridas arranquen
     con los mismos pesos.
+
+    Parameters
+    ----------
+    dropout : float, default=0.0
+        Probabilidad de dropout sobre la salida de la RNN (0 = sin dropout).
 
     Returns
     -------
@@ -92,4 +105,4 @@ def create_bidirectional_rnn_model() -> CapitalizationBidirectionalRNN:
     True
     """
     torch.manual_seed(RANDOM_SEED)
-    return CapitalizationBidirectionalRNN()
+    return CapitalizationBidirectionalRNN(dropout=dropout)

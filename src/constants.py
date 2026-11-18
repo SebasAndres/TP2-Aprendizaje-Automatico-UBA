@@ -26,8 +26,8 @@ REPORTS_DIR = f"{MODELS_DIR}/reports"
 RUN_SEPARATOR = "__"
 
 # Máximo de instancias que aporta CADA fuente, así la más grande (es.txt.gz) no tapa al resto
-CAPITALIZATION_DATASET_SIZE = 1000
-PUNCTUATION_DATASET_SIZE = 1000
+CAPITALIZATION_DATASET_SIZE = 1_000_000
+PUNCTUATION_DATASET_SIZE = 1_000_000
 
 # Peso de cada clase en la CrossEntropy de las redes: (N / (K · n_clase)) ** CLASS_WEIGHT_POWER.
 # 1 = cada clase pesa lo mismo, 0.5 = raíz (punto medio), 0 = sin pesos. Ver src/training/weights.py

@@ -184,14 +184,11 @@ if __name__ == "__main__":
         model_dir = problem_dir(run_dir, problem)
         experiment_results = train_models(development_set, experiments, problem, model_dir)
 
-        # Elegimos el modelo ganador
-        winning_experiment = max(experiment_results, key=lambda name: overall_score(experiment_results[name].score))
-        logger.info(
-            "Ganador en test: %s (%s)", winning_experiment, format_score(experiment_results[winning_experiment].score)
-        )
+        best_on_test = max(experiment_results, key=lambda name: overall_score(experiment_results[name].score))
+        logger.info("Mejor en test: %s (%s)", best_on_test, format_score(experiment_results[best_on_test].score))
 
         # Evaluamos todos los modelos sobre control: es el número honesto para comparar, porque
-        # test ya se usó para elegir la época de cada red y el ganador
+        # test ya se usó para elegir la época de cada red
         control_results = {}
         for experiment in experiments:
             if experiment_results[experiment.name].model is None:  # red sin implementar
@@ -200,9 +197,14 @@ if __name__ == "__main__":
             control_results[experiment.name] = evaluate_on_control(
                 control_set, experiment, experiment_results[experiment.name], problem, model_dir
             )
-        logger.info(
-            "Ganador en control: %s (%s)", winning_experiment, format_score(control_results[winning_experiment].score)
-        )
+        # El ganador se elige sobre control
+        if control_results:
+            winning_experiment = max(control_results, key=lambda name: overall_score(control_results[name].score))
+            logger.info(
+                "Ganador en control: %s (%s)",
+                winning_experiment,
+                format_score(control_results[winning_experiment].score),
+            )
 
         report["problems"][type(problem).__name__] = {
             name: experiment_report(result, control_results.get(name)) for name, result in experiment_results.items()

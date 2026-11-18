@@ -31,7 +31,7 @@ PUNCTUATION_DATASET_SIZE = 1000
 
 # Peso de cada clase en la CrossEntropy de las redes: (N / (K · n_clase)) ** CLASS_WEIGHT_POWER.
 # 1 = cada clase pesa lo mismo, 0.5 = raíz (punto medio), 0 = sin pesos. Ver src/training/weights.py
-CLASS_WEIGHT_POWER = 0.5
+CLASS_WEIGHT_POWER = 0.25
 
 # Las instancias son ventanas de palabras sin solapamiento, con un largo sorteado entre
 # WINDOW_MIN_SIZE y WINDOW_MAX_SIZE según WINDOW_DISTRIBUTION ("uniform" o "normal")

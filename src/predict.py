@@ -19,10 +19,10 @@ dataset y en la métrica:
 Se necesita un modelo por problema, o una red conjunta (que predice los dos):
 
     uv run python -m src.predict datasets/eval.csv -o predicciones.csv \\
-        -m models/<día>__<hora>/CapitalizationProblem/<score>__bidirectional_rnn.pkl \\
-        -m models/<día>__<hora>/PunctuationProblem/<score>__bidirectional_rnn.pkl
+        -m models/runs/CapitalizationProblem/<score>__bidirectional_rnn/<score>__bidirectional_rnn.pkl \\
+        -m models/runs/PunctuationProblem/<score>__bidirectional_rnn/<score>__bidirectional_rnn.pkl
     uv run python -m src.predict datasets/eval.csv -o predicciones.csv \\
-        -m models/<día>__<hora>/PunctuationProblem/<score>__bidirectional_joint_lstm.pkl
+        -m models/runs/PunctuationProblem/<score>__bidirectional_joint_lstm/<score>__bidirectional_joint_lstm.pkl
 """
 
 import csv
@@ -234,7 +234,7 @@ def main() -> None:
         action="append",
         type=Path,
         required=True,
-        help="path a un .pkl o .joblib en models/<día>__<hora>/<Problema>/ (uno por problema, o una sola red conjunta)",
+        help="path a un .pkl o .joblib en models/runs/<Problema>/<score>__<modelo>/ (uno por problema, o una sola red conjunta)",
     )
     args = parser.parse_args()
 

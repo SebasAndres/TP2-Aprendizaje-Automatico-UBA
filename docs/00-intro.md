@@ -45,8 +45,10 @@ problema**:
 | `joint_residual_stacked_bilstm` | LSTM bidireccional de 2 capas conjunta, con residual | `EmbeddingsExtractor` (768) | token | `.pkl` |
 | `joint_conv_bilstm` | Convolución + LSTM bidireccional conjunta | `EmbeddingsExtractor` (768) | token | `.pkl` |
 
-Los modelos se guardan en `models/<día>__<hora>/<Problema>/<score>__<experimento>.<ext>`, con
-el score como el promedio del F1 macro en test de las tareas del problema.
+Cada modelo se guarda en su carpeta, `models/runs/<Problema>/<score>__<experimento>/`, con el score
+como el promedio del F1 macro en test de las tareas del problema. Adentro van los pesos
+(`<score>__<experimento>.<ext>`), su `metadata.json` (corrida, config y métricas) y sus gráficos
+(ver [models/README.md](../models/README.md)).
 
 Cómo se arman las instancias: [01-datasets.md](01-datasets.md). Qué recibe y qué debe devolver cada
 modelo: [02-features_and_expected_output.md](02-features_and_expected_output.md) y

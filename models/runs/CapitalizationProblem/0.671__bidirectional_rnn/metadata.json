@@ -1,0 +1,12 @@
+{
+ "run": "matias__capitalizacion",
+ "problem": "CapitalizationProblem",
+ "model": "bidirectional_rnn",
+ "config": null,
+ "data": null,
+ "test": null,
+ "control": null,
+ "best_epoch": null,
+ "history": null,
+ "note": "Subido por Matias; corrida aparte, sin metrics.json"
+}

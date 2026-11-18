@@ -64,7 +64,8 @@ $$P_c = \frac{TP_c}{TP_c + FP_c}, \qquad R_c = \frac{TP_c}{TP_c + FN_c}, \qquad 
   $\overline{F_1} = \frac{1}{|\mathcal{T}|} \sum_{k \in \mathcal{T}} F_1^{\text{macro}}(k)$
   (`mean_score`): para elegir la época de cada red, el modelo ganador y el score del nombre del
   archivo.
-- Por cada corrida, `models/<día>__<hora>/metrics.json` guarda el F1 macro y la matriz de
-  confusión por tarea, en test y en control, de todos los modelos, y el historial por época de
-  las redes (ver [`src/training/report.py`](../src/training/report.py)). Lo lee
-  `notebooks/poster.ipynb` para los gráficos.
+- Cada modelo guarda en `models/runs/<Problema>/<score>__<experimento>/metadata.json` su corrida,
+  la config, el F1 macro y la matriz de confusión por tarea, en test y en control, y el historial
+  por época de las redes (ver [`src/training/report.py`](../src/training/report.py)).
+  `run_report` junta los de una corrida en el reporte que lee `notebooks/poster.ipynb` para los
+  gráficos.

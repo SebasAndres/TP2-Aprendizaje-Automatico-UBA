@@ -1,6 +1,6 @@
 # Inferencia
 
-Cómo usar los modelos entrenados (`models/<día>__<hora>/<Problema>/<score>__<experimento>`).
+Cómo usar los modelos entrenados (`models/runs/<Problema>/<score>__<experimento>/<score>__<experimento>.<ext>`).
 Ambos scripts aceptan redes (`.pkl`) y modelos clásicos (`.joblib`), uno por problema o una
 sola red conjunta, que predice los dos.
 

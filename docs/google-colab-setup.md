@@ -38,8 +38,8 @@ drive.mount('/content/drive')
 !rm -rf models && ln -s /content/drive/MyDrive/tp2-models models
 ```
 
-Cada modelo queda en Drive apenas termina de entrenarse; el `metrics.json`, al terminar cada
-problema. Igual conviene dejar la computadora sin suspenderse (ej: con Caffeine) y la pestaña
+Cada modelo queda en Drive (`models/runs/<Problema>/<score>__<experimento>/`) apenas termina de
+entrenarse; su `metadata.json` con las métricas, al terminar cada problema. Igual conviene dejar la computadora sin suspenderse (ej: con Caffeine) y la pestaña
 abierta.
 
 ## 4. Correr el pipeline
@@ -56,7 +56,7 @@ más épocas y solo algunos experimentos:
     --experiments bidirectional_joint_lstm,joint_projected_bigru,joint_residual_stacked_bilstm,joint_conv_bilstm
 ```
 
-Para el notebook del póster conviene correr todos los experimentos (sin `--experiments`): lee el
-`metrics.json` de la última corrida, y sin los demás no hay contra qué comparar.
+Para el notebook del póster conviene correr todos los experimentos (sin `--experiments`): compara
+los modelos de una misma corrida, y sin los demás no hay contra qué comparar.
 
 El dataset ya viene en el repo y el modelo de BERT se baja solo la primera vez. Los scores salen en el log.

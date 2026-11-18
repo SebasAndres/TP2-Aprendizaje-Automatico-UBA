@@ -40,7 +40,8 @@ from src.problem import CapitalizationProblem, PunctuationProblem
 from src.problem.joint import create_joint_model, joint_model_name
 from src.training.neural import N_EPOCHS, train_neural_model
 from src.training.result import TrainResult, format_score
-from src.training.train import _file_stem, _save_experiment, create_run_directory, problem_dir
+from src.training.report import experiment_report, model_metadata, save_metadata
+from src.training.train import model_directory, model_stem, new_run, save_experiment
 
 logger = logging.getLogger("src.joint_rnn")
 
@@ -110,9 +111,9 @@ def main() -> None:
 def save_joint_result(result: TrainResult, name: str) -> None:
     """Guarda la red como lo hace el pipeline, una copia por problema con el score de sus tareas.
 
-    El archivo queda en ``models/<día>__<hora>/<Problema>/<score>__<name>.pkl``. Así
-    ``src.inference`` la encuentra al elegir cualquiera de los dos problemas, y como es
-    conjunta predice los dos.
+    Cada copia queda en ``models/runs/<Problema>/<score>__<name>/``, con su metadata.json
+    (sin config: este script no la registra). Así ``src.inference`` la encuentra al elegir
+    cualquiera de los dos problemas, y como es conjunta predice los dos.
 
     Parameters
     ----------
@@ -121,13 +122,15 @@ def save_joint_result(result: TrainResult, name: str) -> None:
     name : str
         Nombre del experimento (ver ``joint_model_name``).
     """
-    run_dir = create_run_directory()
+    run = new_run()
     for problem in (CapitalizationProblem(), PunctuationProblem()):
+        problem_name = type(problem).__name__
         problem_result = result.only_tasks(problem.metric.tasks)
-        model_dir = problem_dir(run_dir, problem)
-        file_stem = _file_stem(model_dir, name, problem_result)
-        _save_experiment(name, problem_result, file_stem, type(problem).__name__)
-        print(f"Guardado en {file_stem}.pkl")
+        model_dir = model_directory(problem_name, name, problem_result, run)
+        save_experiment(name, problem_result, model_dir, problem_name)
+        report = {"config": None, "data": {}, "problems": {problem_name: {name: experiment_report(problem_result, None)}}}
+        save_metadata(model_dir, model_metadata(run, problem_name, name, report))
+        print(f"Guardado en {model_dir / model_stem(name, problem_result)}.pkl")
 
 
 if __name__ == "__main__":

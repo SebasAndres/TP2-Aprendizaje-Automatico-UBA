@@ -1,44 +1,15 @@
-# tp aa2
+# TP AA2
 
-Antes de la primera ejecucion ejecutar para sincronizar el entorno
-~~~bash
-uv sync
-~~~
+![](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOTdobm05c21ibHExajVtdG84a3IxZTFyNjluZXI1NzY4MXRiOGhtaiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/26DMYGqFfcyQbqh7G/giphy.gif)
 
-Para ejecutar el entrenamiento se usa
-~~~bash
-uv run python -m src.pipeline
-~~~
+## Integrantes 👤
+- Sebastián Ignacio Andrés
+- Nicolas Del Gobbo
+- Matias Cicculli
 
-Para iterar rápido con pocos datos y solo algunos experimentos (los nombres de `build_experiments`
-en `src/training/train.py`):
-~~~bash
-uv run python -m src.pipeline --experiments standard_rnn,joint_lstm \
-    --capitalization-size 300 --punctuation-size 300
-~~~
-
-Para probar RT los modelos se usa
-~~~bash
-uv run python -m src.inference
-~~~
-
-Para generar el `.csv` de predicciones del enunciado (entrada: `instancia_id,token_id,token`)
-se pasa un modelo por problema, o una sola red conjunta:
-~~~bash
-uv run python -m src.predict eval.csv -o predicciones.csv \
-    -m models/runs/CapitalizationProblem/0.706__bidirectional_rnn/0.706__bidirectional_rnn.pkl \
-    -m models/runs/PunctuationProblem/0.750__bidirectional_rnn/0.750__bidirectional_rnn.pkl
-~~~
-
-## RNN conjunta (prototipo)
-
-Una sola RNN que predice capitalización, puntuación inicial y puntuación final al mismo tiempo,
-compartiendo los pesos entre las tres tareas. Está fuera del pipeline para discutir si conviene
-compartir pesos. Usa los mismos splits, semilla e hiperparámetros que la RNN estándar de capitalización.
-
-~~~bash
-uv run python -m src.joint_rnn --size 10000                  # RNN estándar, hasta 10000 instancias por fuente
-uv run python -m src.joint_rnn --size 10000 --bidirectional  # RNN bidireccional
-uv run python -m src.joint_rnn                               # todas las instancias de cada fuente
-uv run python -m src.joint_rnn --bidirectional --lstm        # LSTM bidireccional en lugar de RNN simple
-~~~
+## Guía
+- [Setup entorno local 💻](/docs/setup/local-env.md)
+- [Entrenamiento en Colab 📓](/docs/setup/google-colab-setup.md)
+- [Resultados CSV](/competencia/predicciones.csv)
+- [Gráficos 🧪](/models/reports/)
+- [Modelos entrenados por problema](/models/runs/): están nombrados por score en test y arquitectura.

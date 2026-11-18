@@ -18,12 +18,17 @@ class Problem(ABC):
         Dropout de ``bidirectional_rnn`` (sobre la salida de la RNN y dentro de la cabeza).
     bidirectional_rnn_head_dim : int or None
         Capa oculta de la cabeza de ``bidirectional_rnn``; ``None`` = cabeza lineal.
+
+    Notes
+    -----
+    Dropout 0.3 y cabeza no lineal de 128 son los de la BiRNN del experimento final
+    (``notebooks/experiments/final_birnn_dropout_cabeza.ipynb``, corrida ``2026-11-18__04-44-00``).
     """
 
     metric: Metric
     bidirectional_rnn_weight_decay: float = 0.0
-    bidirectional_rnn_dropout: float = 0.0
-    bidirectional_rnn_head_dim: int | None = None
+    bidirectional_rnn_dropout: float = 0.3
+    bidirectional_rnn_head_dim: int | None = 128
 
     @abstractmethod
     def classic_model(self) -> Any:

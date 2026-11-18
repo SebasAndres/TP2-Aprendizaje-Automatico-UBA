@@ -13,9 +13,11 @@ class PunctuationProblem(Problem):
     """Problema de puntuación: su métrica y sus modelos."""
 
     metric = PunctuationMetric()
-    # El mejor F1 en test del barrido (0.644 vs 0.638 sin decay), confirmado en control (0.652 vs 0.647).
-    # En capitalización queda en 0: con decay empeora en test (ver notebooks/hyperparameters/regularization/regularization_weight_decay.ipynb)
-    bidirectional_rnn_weight_decay = 1.0
+    # 0.1, el del experimento final (notebooks/experiments/final_birnn_dropout_cabeza.ipynb). El barrido había
+    # elegido 1.0 (0.644 vs 0.638 sin decay en test, 0.652 vs 0.647 en control), pero con class_weight_power = 0.25
+    # el candidato final y el final usaron 0.1. En capitalización queda en 0: con decay empeora en test
+    # (ver notebooks/hyperparameters/regularization/regularization_weight_decay.ipynb)
+    bidirectional_rnn_weight_decay = 0.1
 
     def classic_model(self) -> RandomForestClassifier:
         """Crea el modelo clásico de puntuación, sin entrenar.

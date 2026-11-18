@@ -73,9 +73,9 @@ con $C_k$ las clases de la tarea (4, 2 o 4).
 | Experimento | Clase | Capa recurrente | Cabezas | Salida | Parámetros |
 |---|---|---|---|---|---|
 | `standard_rnn` (capitalización) | `CapitalizationRNN` | `nn.RNN(768, 128)` | 1 lineal → 4 | `(B, T, 4)` | 115 K |
-| `bidirectional_rnn` (capitalización) | `CapitalizationBidirectionalRNN` | `nn.RNN(768, 128, bidirectional)` | 1 lineal → 4 | `(B, T, 4)` | 231 K |
+| `bidirectional_rnn` (capitalización) | `CapitalizationBidirectionalRNN` | `nn.RNN(768, 128, bidirectional)` + dropout 0.3 | MLP 256 → 128 → 4 (GELU, dropout 0.3) | `(B, T, 4)` | 263 K |
 | `standard_rnn` (puntuación) | `PunctuationRNN` | `nn.RNN(768, 128)` | inicial → 2, final → 4 | `(B, T, 2, 4)` | 116 K |
-| `bidirectional_rnn` (puntuación) | `PunctuationBidirectionalRNN` | `nn.RNN(768, 128, bidirectional)` | inicial → 2, final → 4 | `(B, T, 2, 4)` | 231 K |
+| `bidirectional_rnn` (puntuación) | `PunctuationBidirectionalRNN` | `nn.RNN(768, 128, bidirectional)` + dropout 0.3 | MLP 256 → 128 → clases por tarea: inicial → 2, final → 4 (GELU, dropout 0.3) | `(B, T, 2, 4)` | 296 K |
 | `joint_rnn` | `JointRNN` | `nn.RNN(768, 128)` | cap → 4, inicial → 2, final → 4 | `(B, T, 3, 4)` | 116 K |
 | `bidirectional_joint_rnn` | `JointRNN` | `nn.RNN(768, 128, bidirectional)` | ídem | `(B, T, 3, 4)` | 232 K |
 | `joint_lstm` | `JointLSTM` | `nn.LSTM(768, 128)` | ídem | `(B, T, 3, 4)` | 461 K |

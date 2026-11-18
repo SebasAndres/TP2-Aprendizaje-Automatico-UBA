@@ -10,6 +10,6 @@
 ## Guía
 - [Setup entorno local 💻](/docs/setup/local-env.md)
 - [Entrenamiento en Colab 📓](/docs/setup/google-colab-setup.md)
-- [Resultados CSV](/competencia/predicciones.csv)
+- [Resultados CSV 📋](/competencia/predicciones.csv)
 - [Gráficos 🧪](/models/reports/)
-- [Modelos entrenados por problema](/models/runs/): están nombrados por score en test y arquitectura.
+- [Modelos entrenados por problema](/models/runs/): nombrados por score en test y arquitectura.

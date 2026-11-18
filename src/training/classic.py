@@ -27,16 +27,18 @@ from src.data import dataset_samples
 from src.features import TextFeatureExtractor
 from src.features.dictionary import CapitalizationDictionary
 from src.metrics import Metric
-from src.metrics.base import WordLevelTask
+from src.metrics.base import WordLevelTask, per_class_from_tasks, scores_from_tasks
 from src.problem import Problem
+from src.training import neural
 from src.training.neural import Trainer
-from src.training.result import TrainResult
+from src.training.result import EpochMetrics, TrainResult
 from src.words import split_words, token_word_ids
 
 logger = logging.getLogger(__name__)
 
 LOG_EVERY_N_SENTENCES = 5000
 N_FOLDS = 5
+PROBA_EPS = 1e-7  # piso de las probabilidades en la log loss, para que no dé infinito
 
 
 @dataclass
@@ -207,13 +209,203 @@ def train_classic_model(
     return TrainResult(model, evaluate_classic_model(model, test_loader, feature_extractor, problem))
 
 
-def classic_trainer(use_dictionary: bool) -> Trainer:
+def _trees_per_iteration(n_estimators: int, n_iterations: int) -> list[int]:
+    """Cuántos árboles tiene el bosque al final de cada iteración.
+
+    Parameters
+    ----------
+    n_estimators : int
+        Árboles del bosque completo.
+    n_iterations : int
+        Cantidad de iteraciones.
+
+    Returns
+    -------
+    list[int]
+        Ej: ``(100, 20)`` -> ``[5, 10, ..., 100]``. La última es siempre ``n_estimators``.
+    """
+    return [max(1, round(n_estimators * (i + 1) / n_iterations)) for i in range(n_iterations)]
+
+
+class _ForestVotes:
+    """Suma de las probabilidades de los árboles de un bosque sobre un conjunto fijo de filas.
+
+    Así, al agregar árboles con ``warm_start``, solo se predice con los nuevos. El promedio de
+    las probabilidades de los árboles es lo que usa ``RandomForestClassifier.predict``.
+
+    Parameters
+    ----------
+    X : np.ndarray of shape (n_filas, n_features)
+        Filas a predecir.
+    """
+
+    def __init__(self, X: np.ndarray) -> None:
+        self.X = X.astype(np.float32)  # el tipo que usan los árboles por dentro
+        self.sums: list[np.ndarray] | None = None
+        self.n_trees = 0
+
+    def add(self, trees: list[Any]) -> None:
+        """Suma las probabilidades de ``trees``.
+
+        Parameters
+        ----------
+        trees : list
+            Árboles nuevos del bosque.
+        """
+        for tree in trees:
+            proba = tree.predict_proba(self.X, check_input=False)
+            proba = proba if isinstance(proba, list) else [proba]  # una salida por tarea
+            self.sums = proba if self.sums is None else [s + p for s, p in zip(self.sums, proba)]
+            self.n_trees += 1
+
+    def predict(self, forest: Any) -> tuple[np.ndarray, list[np.ndarray]]:
+        """Predice como ``forest.predict`` con los árboles sumados hasta ahora.
+
+        Parameters
+        ----------
+        forest : RandomForestClassifier
+            Bosque, para pasar de índice de clase a clase.
+
+        Returns
+        -------
+        pred : np.ndarray of shape (n_filas,) or (n_filas, n_tareas)
+            Clase predicha de cada fila.
+        proba : list[np.ndarray]
+            Probabilidad de cada clase, una matriz por tarea.
+        """
+        proba = [s / self.n_trees for s in self.sums]
+        classes = forest.classes_ if forest.n_outputs_ > 1 else [forest.classes_]
+        pred = np.stack([c[p.argmax(axis=1)] for c, p in zip(classes, proba)], axis=1)
+        return (pred[:, 0] if forest.n_outputs_ == 1 else pred), proba
+
+
+def _log_loss(forest: Any, proba: list[np.ndarray], Y: np.ndarray) -> float:
+    """Log loss promedio por palabra, sumada sobre las tareas (como la loss de las redes conjuntas).
+
+    Parameters
+    ----------
+    forest : RandomForestClassifier
+        Bosque, para ubicar la columna de cada clase.
+    proba : list[np.ndarray]
+        Probabilidad de cada clase, una matriz por tarea.
+    Y : np.ndarray of shape (n_filas,) or (n_filas, n_tareas)
+        Clases reales.
+
+    Returns
+    -------
+    float
+        La log loss, sin pesos por clase.
+    """
+    classes = forest.classes_ if forest.n_outputs_ > 1 else [forest.classes_]
+    Y = Y.reshape(len(Y), -1)
+    total = 0.0
+    for task, (c, p) in enumerate(zip(classes, proba)):
+        columns = np.searchsorted(c, Y[:, task])
+        total += -np.log(np.clip(p[np.arange(len(Y)), columns], PROBA_EPS, 1.0)).mean()
+    return float(total)
+
+
+def train_classic_model_by_iterations(
+    train_loader: DataLoader,
+    test_loader: DataLoader,
+    feature_extractor: TextFeatureExtractor,
+    problem: Problem,
+    use_dictionary: bool = False,
+    n_iterations: int | None = None,
+) -> TrainResult:
+    """Como ``train_classic_model``, pero hace crecer el bosque de a poco y guarda un historial.
+
+    El random forest no entrena por épocas: en cada iteración se le agregan árboles
+    (``warm_start``) hasta llegar a los ``n_estimators`` de ``problem.classic_model()``, y se
+    mide el F1 en train y en test, igual que las redes en cada época. Con la misma semilla, el
+    bosque final es el mismo que el de ``train_classic_model``.
+
+    El F1 de train se calcula con las mismas features con que se ajustó (en train, el diccionario
+    de cada oración no incluye su parte, ver ``_train_features_source``). Los árboles crecen hasta
+    el fondo, así que en train queda muy cerca de 1. La loss es la log loss sin pesos por clase:
+    no se compara con la de las redes.
+
+    Parameters
+    ----------
+    train_loader : DataLoader
+        Instancias de train.
+    test_loader : DataLoader
+        Instancias de test.
+    feature_extractor : TextFeatureExtractor
+        Extractor con el que se calculan las features por palabra.
+    problem : Problem
+        Problema a resolver: da el modelo clásico y la métrica.
+    use_dictionary : bool, default=False
+        Si agrega las features del diccionario de capitalización.
+    n_iterations : int or None, default=None
+        Iteraciones; ``None`` usa ``neural.N_EPOCHS`` (el pipeline lo cambia con ``--epochs``).
+
+    Returns
+    -------
+    TrainResult
+        El ``ClassicModel`` con todos los árboles, sus predicciones sobre test y el historial
+        por iteración. ``best_epoch`` es la última: el modelo guardado es el bosque completo.
+    """
+    n_iterations = n_iterations or neural.N_EPOCHS
+    train_set = train_loader.dataset
+    model = ClassicModel(problem.classic_model())
+    forest = model.estimator
+    if use_dictionary:
+        logger.info("Armando el diccionario de capitalización con train")
+        model.dictionary = CapitalizationDictionary(dataset_samples(train_set))
+    logger.info("Extrayendo features de train")
+    X_train, Y_train = _dataset_to_numpy(
+        train_set, feature_extractor, problem.metric, _train_features_source(train_set, model)
+    )
+    logger.info("Extrayendo features de test")
+    X_test, Y_test = _dataset_to_numpy(test_loader.dataset, feature_extractor, problem.metric, lambda i: model)
+
+    train_votes, test_votes = _ForestVotes(X_train), _ForestVotes(X_test)
+    history: list[EpochMetrics] = []
+    forest.set_params(warm_start=True)
+    for iteration, n_trees in enumerate(_trees_per_iteration(forest.n_estimators, n_iterations), start=1):
+        before = len(getattr(forest, "estimators_", []))
+        forest.set_params(n_estimators=n_trees)
+        forest.fit(X_train, Y_train)
+        new_trees = forest.estimators_[before:]
+        train_votes.add(new_trees)
+        test_votes.add(new_trees)
+
+        train_pred, train_proba = train_votes.predict(forest)
+        test_pred, test_proba = test_votes.predict(forest)
+        train_tasks = problem.metric.word_level(train_pred, Y_train, np.arange(len(Y_train)))
+        test_tasks = problem.metric.word_level(test_pred, Y_test, np.arange(len(Y_test)))
+        metrics = EpochMetrics(
+            epoch=iteration,
+            loss=_log_loss(forest, train_proba, Y_train),
+            score=scores_from_tasks(train_tasks),
+            per_class=per_class_from_tasks(train_tasks),
+            test_loss=_log_loss(forest, test_proba, Y_test),
+            test_score=scores_from_tasks(test_tasks),
+        )
+        history.append(metrics)
+        logger.info(
+            "Iteración %d/%d (%d árboles): train %s · test %s",
+            iteration,
+            n_iterations,
+            n_trees,
+            " ".join(f"{t}={v:.3f}" for t, v in metrics.score.items()),
+            " ".join(f"{t}={v:.3f}" for t, v in metrics.test_score.items()),
+        )
+    forest.set_params(warm_start=False)
+    return TrainResult(model, test_tasks, history, best_epoch=n_iterations)
+
+
+def classic_trainer(use_dictionary: bool, by_iterations: bool = False) -> Trainer:
     """Adapta ``train_classic_model`` a la firma de ``Experiment.trainer``.
 
     Parameters
     ----------
     use_dictionary : bool
         Si el modelo usa el diccionario de capitalización.
+    by_iterations : bool, default=False
+        Si usa ``train_classic_model_by_iterations`` (bosque que crece por iteraciones, con
+        historial para las curvas de aprendizaje).
 
     Returns
     -------
@@ -240,8 +432,12 @@ def classic_trainer(use_dictionary: bool) -> Trainer:
         Returns
         -------
         TrainResult
-            Ver ``train_classic_model``.
+            Ver ``train_classic_model`` y ``train_classic_model_by_iterations``.
         """
+        if by_iterations:
+            return train_classic_model_by_iterations(
+                train_loader, test_loader, feature_extractor, problem, use_dictionary
+            )
         return train_classic_model(train_loader, test_loader, feature_extractor, problem, use_dictionary)
 
     return trainer

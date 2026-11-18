@@ -65,6 +65,8 @@ NETWORK_STYLES = {
     "joint_projected_bigru": ("#6250d6", "X"),  # violeta
     "joint_residual_stacked_bilstm": ("#e34948", "*"),  # rojo
     "joint_conv_bilstm": ("#7a4a1e", "h"),  # marrón
+    # El random forest crece por iteraciones (src/training/classic.py): gris, como referencia
+    "classic_features_dictionary": ("#7d7d7d", "o"),  # gris
 }
 SPLIT_LABELS = {"test": "test", "control": "control"}
 PROBLEM_LABELS = {"CapitalizationProblem": "capitalización", "PunctuationProblem": "puntuación"}

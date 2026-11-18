@@ -73,12 +73,20 @@ def build_experiments() -> list[Experiment]:
         #     ClassicFeatureExtractor(),
         # ),
         # Experiment("classic_embeddings", train_classic_model, evaluate_classic_model, AverageEmbeddingsExtractor()),
-        # Experiment(
-        #     "standard_rnn",
-        #     neural_trainer(lambda problem: problem.standard_rnn_model()),
-        #     evaluate_problem_network,
-        #     embeddings,
-        # ),
+        # Random forest con atributos + diccionario que crece de a poco: una iteración por época
+        # (--epochs), hasta los 100 árboles del modelo clásico. Así tiene curvas de aprendizaje
+        Experiment(
+            "classic_features_dictionary",
+            classic_trainer(use_dictionary=True, by_iterations=True),
+            evaluate_classic_model,
+            ClassicFeatureExtractor(),
+        ),
+        Experiment(
+            "standard_rnn",
+            neural_trainer(lambda problem: problem.standard_rnn_model()),
+            evaluate_problem_network,
+            embeddings,
+        ),
         Experiment(
             "bidirectional_rnn",
             neural_trainer(

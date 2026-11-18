@@ -215,10 +215,10 @@ def _task_model(report: Report, task: str, model: str) -> Report | None:
     return None
 
 
-def _curve_panel(ax: Axes, report: Report, task: str) -> None:
+def _curve_panel(ax: Axes, report: Report, task: str, models: list[str] = MODELS) -> None:
     """Dibuja train (punteado) y test (lleno) de cada modelo en una tarea, marcando la época elegida."""
     all_epochs: list[int] = []
-    for model in MODELS:
+    for model in models:
         model_report = _task_model(report, task, model)
         if not model_report:
             continue
@@ -235,13 +235,15 @@ def _curve_panel(ax: Axes, report: Report, task: str) -> None:
     ax.set_title(P.TASK_LABELS[task], loc="left", fontsize=11, color=TEXT_PRIMARY)
 
 
-def plot_train_test_curves(report: Report) -> Figure:
-    """F1 macro en train y test por época, un panel por tarea, los dos modelos juntos.
+def plot_train_test_curves(report: Report, models: list[str] = MODELS) -> Figure:
+    """F1 macro en train y test por época, un panel por tarea, los modelos juntos.
 
     Parameters
     ----------
     report : Report
         Reporte del candidato final.
+    models : list[str], default=MODELS
+        Modelos a dibujar, en el orden de la leyenda.
 
     Returns
     -------
@@ -251,11 +253,11 @@ def plot_train_test_curves(report: Report) -> Figure:
     """
     fig, axes = _figure(1, len(P.TASKS), 15, 4.4)
     for ax, task in zip(axes[0], P.TASKS):
-        _curve_panel(ax, report, task)
+        _curve_panel(ax, report, task, models)
     axes[0, 0].set_ylabel("F1 macro", color=TEXT_SECONDARY)
     handles, labels = axes[0, 0].get_legend_handles_labels()
     P._title(fig, "Curvas de aprendizaje: train (punteado) vs test (lleno)")
-    fig.legend(handles, labels, frameon=False, fontsize=9, loc="upper right", ncol=4)
+    fig.legend(handles, labels, frameon=False, fontsize=9, loc="upper right", ncol=min(len(handles), 4))
     return fig
 
 

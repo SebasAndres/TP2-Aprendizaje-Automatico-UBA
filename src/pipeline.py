@@ -17,12 +17,11 @@ from src.training import (
     Experiment,
     build_experiments,
     evaluate_on_control,
-    create_run_directory,
-    problem_dir,
+    new_run,
     train_models,
 )
 from src.training import neural
-from src.training.report import data_report, experiment_report, save_report
+from src.training.report import data_report, experiment_report, model_metadata, save_metadata
 from src.training.result import format_score
 from src.problem import CapitalizationProblem, PunctuationProblem
 
@@ -172,9 +171,10 @@ if __name__ == "__main__":
         args.punctuation_size, args.capitalization_size, window_from_args(args)
     )
 
-    # Todo lo que guarda esta ejecución va a su propia carpeta: models/<día>__<hora>/
-    run_dir = create_run_directory()
-    logger.info("Guardando modelos en %s", run_dir)
+    # Cada modelo va a su carpeta models/runs/<Problema>/<score>__<modelo>/, y su metadata.json
+    # dice de qué corrida es
+    run = new_run()
+    logger.info("Corrida %s", run)
     report: dict[str, Any] = {"config": run_config(args), "data": {}, "problems": {}}
 
     # Para cada problema
@@ -189,8 +189,7 @@ if __name__ == "__main__":
         report["data"][type(problem).__name__] = data_report(dataset.samples)
         logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
 
-        model_dir = problem_dir(run_dir, problem)
-        experiment_results = train_models(development_set, experiments, problem, model_dir)
+        experiment_results, model_dirs = train_models(development_set, experiments, problem, run)
 
         best_on_test = max(experiment_results, key=lambda name: overall_score(experiment_results[name].score))
         logger.info("Mejor en test: %s (%s)", best_on_test, format_score(experiment_results[best_on_test].score))
@@ -203,7 +202,7 @@ if __name__ == "__main__":
                 continue
             logger.info("Evaluando %s sobre control", experiment.name)
             control_results[experiment.name] = evaluate_on_control(
-                control_set, experiment, experiment_results[experiment.name], problem, model_dir
+                control_set, experiment, experiment_results[experiment.name], problem, model_dirs[experiment.name]
             )
         # El ganador se elige sobre control
         if control_results:
@@ -214,9 +213,12 @@ if __name__ == "__main__":
                 format_score(control_results[winning_experiment].score),
             )
 
-        report["problems"][type(problem).__name__] = {
+        problem_name = type(problem).__name__
+        report["problems"][problem_name] = {
             name: experiment_report(result, control_results.get(name)) for name, result in experiment_results.items()
         }
-        logger.info("Métricas guardadas en %s", save_report(run_dir, report))
+        for name, model_dir in model_dirs.items():
+            metadata = save_metadata(model_dir, model_metadata(run, problem_name, name, report))
+            logger.info("Metadata guardada en %s", metadata)
 
     logger.info("Pipeline finalizado")

@@ -17,8 +17,12 @@ DATASET_SOURCES = {
 
 MODELS_DIR = "models"
 
-# Cada ejecución del pipeline guarda sus modelos en models/<día>__<hora>/<Problema>/<score>__<modelo>,
-# ej: models/2026-11-12__19-30-05/PunctuationProblem/0.812__standard_rnn.pkl
+# Cada modelo entrenado tiene su carpeta en models/runs/<Problema>/<score>__<modelo>/, con los pesos,
+# su metadata.json (corrida <día>__<hora>, config y métricas) y sus gráficos,
+# ej: models/runs/PunctuationProblem/0.812__standard_rnn/0.812__standard_rnn.pkl
+RUNS_DIR = f"{MODELS_DIR}/runs"
+# Lo que compara varios modelos (pósters, reportes unidos) va en models/reports/<nombre>/
+REPORTS_DIR = f"{MODELS_DIR}/reports"
 RUN_SEPARATOR = "__"
 
 # Máximo de instancias que aporta CADA fuente, así la más grande (es.txt.gz) no tapa al resto

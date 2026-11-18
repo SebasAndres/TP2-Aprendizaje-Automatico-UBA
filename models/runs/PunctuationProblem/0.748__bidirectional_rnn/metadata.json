@@ -1,0 +1,12 @@
+{
+ "run": "matias__punctuation_birr_puntini",
+ "problem": "PunctuationProblem",
+ "model": "bidirectional_rnn",
+ "config": null,
+ "data": null,
+ "test": null,
+ "control": null,
+ "best_epoch": null,
+ "history": null,
+ "note": "Subido por Matias; corrida aparte, sin metrics.json"
+}

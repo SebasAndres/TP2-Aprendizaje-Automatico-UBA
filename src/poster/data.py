@@ -1,14 +1,14 @@
-"""Datos para los gráficos del póster: el reporte (metrics.json) de una corrida del pipeline.
+"""Datos para los gráficos del póster: el reporte de una corrida del pipeline.
 
-Las corridas nuevas lo guardan solas (ver src/training/report.py). Para una carpeta vieja que
-no lo tiene, `load_run` vuelve a evaluar sus modelos sobre test y control, con los mismos
-splits del pipeline, y lo guarda en la carpeta para no repetirlo. Para eso hay que pasarle
-los tamaños y la ventana con que se entrenó (los splits dependen de ellos). Una corrida vieja
-no tiene historial por época, y no se pueden evaluar sus `classic_features` (de antes de que
-los modelos clásicos pasaran a nivel palabra, con otros atributos).
+El reporte se arma con la metadata.json de cada modelo de la corrida (ver src/training/report.py).
+Las corridas nuevas la guardan con sus métricas. Para un modelo viejo sin métricas, `load_run`
+lo vuelve a evaluar sobre test y control, con los mismos splits del pipeline, y las guarda en su
+metadata para no repetirlo. Para eso hay que pasarle los tamaños y la ventana con que se entrenó
+(los splits dependen de ellos). Un modelo reevaluado no tiene historial por época, y no se pueden
+evaluar los `classic_features` viejos (de antes de que los modelos clásicos pasaran a nivel
+palabra, con otros atributos).
 """
 
-import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -16,9 +16,9 @@ from typing import Any
 
 import numpy as np
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
-from src.constants import CAPITALIZATION_DATASET_SIZE, MODELS_DIR, PUNCTUATION_DATASET_SIZE, RUN_SEPARATOR
+from src.constants import CAPITALIZATION_DATASET_SIZE, PUNCTUATION_DATASET_SIZE, RUNS_DIR
 from src.data import (
     build_loader,
     load_documents,
@@ -29,13 +29,21 @@ from src.data import (
 )
 from src.data.samples import WindowSpec
 from src.features import AverageEmbeddingsExtractor, TextFeatureExtractor
-from src.inference import available_models, load_model, model_name
+from src.inference import load_model, model_name
 from src.metrics import Metric
 from src.metrics.base import WordLevelTask
 from src.problem import CapitalizationProblem, Problem, PunctuationProblem
 from src.training import Experiment, build_experiments
 from src.training.classic import ClassicModel
-from src.training.report import REPORT_FILE, data_report, save_report, tasks_report
+from src.training.report import (
+    data_report,
+    list_runs,
+    load_metadata,
+    load_report,
+    run_models,
+    save_metadata,
+    tasks_report,
+)
 from src.words import concat_word_ids, token_word_ids
 
 logger = logging.getLogger(__name__)
@@ -44,52 +52,45 @@ Report = dict[str, Any]
 Evaluate = Callable[[DataLoader], dict[str, WordLevelTask]]
 
 
-def latest_run(models_dir: str | Path = MODELS_DIR) -> Path:
-    """Busca la corrida más reciente con modelos de algún problema.
-
-    Las carpetas se llaman ``<día>__<hora>``, así que la última en orden alfabético es
-    la más nueva.
+def latest_run(runs_dir: str | Path = RUNS_DIR) -> str:
+    """Busca la corrida ``<día>__<hora>`` más reciente con algún modelo.
 
     Parameters
     ----------
-    models_dir : str or Path, default=MODELS_DIR
-        Carpeta con las corridas.
+    runs_dir : str or Path, default=RUNS_DIR
+        Carpeta con los modelos.
 
     Returns
     -------
-    Path
-        Carpeta de la corrida.
+    str
+        La corrida, ej: ``'2026-11-12__19-30-05'``.
 
     Raises
     ------
     FileNotFoundError
         Si no hay ninguna corrida con modelos.
     """
-    runs = sorted(
-        run
-        for run in Path(models_dir).glob(f"*{RUN_SEPARATOR}*")
-        if any(available_models(run / problem) for problem in ("CapitalizationProblem", "PunctuationProblem"))
-    )
+    runs = [run for run in list_runs(runs_dir) if run[:1].isdigit()]
     if not runs:
-        raise FileNotFoundError(f"No hay corridas con modelos en {models_dir}/: correr antes src.pipeline")
+        raise FileNotFoundError(f"No hay corridas con modelos en {runs_dir}/: correr antes src.pipeline")
     return runs[-1]
 
 
 def load_run(
-    run_dir: str | Path,
+    run: str,
     capitalization_size: int = CAPITALIZATION_DATASET_SIZE,
     punctuation_size: int = PUNCTUATION_DATASET_SIZE,
     window: WindowSpec | None = WindowSpec(),
 ) -> Report:
-    """Carga el reporte de la corrida, armándolo si no existe.
+    """Carga el reporte de la corrida, completando lo que le falte a la metadata de sus modelos.
 
-    Si la carpeta no tiene ``metrics.json``, lo arma reevaluando sus modelos con esos
-    tamaños y ventana (los de la corrida). En los dos casos lo guarda.
+    Los modelos sin métricas se reevalúan con esos tamaños y ventana (los de la corrida), y los
+    que no tienen los tamaños de los splits los recalculan. En los dos casos se guarda en su metadata.
 
     Parameters
     ----------
-    run_dir : str or Path
-        Carpeta de la corrida.
+    run : str
+        Corrida, ej: ``'2026-11-16__13-37-08'``.
     capitalization_size : int, default=CAPITALIZATION_DATASET_SIZE
         Instancias por fuente con que se entrenó capitalización.
     punctuation_size : int, default=PUNCTUATION_DATASET_SIZE
@@ -102,17 +103,32 @@ def load_run(
     Report
         El reporte, con el formato de ``src/training/report.py``.
     """
-    run_dir = Path(run_dir)
-    path = run_dir / REPORT_FILE
-    if path.exists():
-        report = json.loads(path.read_text(encoding="utf-8"))
-    else:
-        logger.warning("%s no tiene %s: reevaluando sus modelos (tarda unos minutos)", run_dir, REPORT_FILE)
-        report = reevaluate_run(run_dir, capitalization_size, punctuation_size, window)
-    if "data" not in report:  # corridas de antes de que el pipeline guardara los tamaños
-        report["data"] = data_sizes(report["config"])
-    logger.info("Reporte guardado en %s", save_report(run_dir, report))
-    return report
+    folders = run_models(run)
+    if not folders:
+        raise FileNotFoundError(f"No hay modelos de la corrida {run} en {RUNS_DIR}/")
+    missing = [folder for folder in folders if load_metadata(folder).get("test") is None]
+    if missing:
+        logger.warning("%d modelos de %s no tienen métricas: reevaluando (tarda unos minutos)", len(missing), run)
+        reevaluate_models(missing, capitalization_size, punctuation_size, window)
+    _fill_data_sizes(folders)
+    return load_report(folders)
+
+
+def _fill_data_sizes(folders: list[Path]) -> None:
+    """Agrega los tamaños de los splits a la metadata de los modelos que no los tienen.
+
+    Parameters
+    ----------
+    folders : list[Path]
+        Carpetas de los modelos de una corrida.
+    """
+    without = [folder for folder in folders if not load_metadata(folder).get("data")]
+    if not without or not load_metadata(without[0]).get("config"):  # sin config no se pueden rearmar
+        return
+    sizes = data_sizes(load_metadata(without[0])["config"])  # corridas de antes de que se guardaran
+    for folder in without:
+        metadata = load_metadata(folder)
+        save_metadata(folder, {**metadata, "data": sizes[metadata["problem"]]})
 
 
 def data_sizes(config: dict[str, Any]) -> dict[str, dict[str, dict[str, int]]]:
@@ -137,24 +153,21 @@ def data_sizes(config: dict[str, Any]) -> dict[str, dict[str, dict[str, int]]]:
     return {problem: data_report(load_samples(documents, size, window)) for problem, size in sizes.items()}
 
 
-def reevaluate_run(run_dir: Path, capitalization_size: int, punctuation_size: int, window: WindowSpec | None) -> Report:
-    """Evalúa sobre test y control todos los modelos de la carpeta que se puedan cargar.
+def reevaluate_models(
+    folders: list[Path], capitalization_size: int, punctuation_size: int, window: WindowSpec | None
+) -> None:
+    """Evalúa sobre test y control los modelos de esas carpetas y guarda las métricas en su metadata.
 
     Parameters
     ----------
-    run_dir : Path
-        Carpeta de la corrida.
+    folders : list[Path]
+        Carpetas de los modelos.
     capitalization_size : int
         Instancias por fuente con que se entrenó capitalización.
     punctuation_size : int
         Instancias por fuente con que se entrenó puntuación.
     window : WindowSpec or None
         Ventana con que se cortaron las instancias.
-
-    Returns
-    -------
-    Report
-        Reporte con ``"config"`` y ``"problems"`` (sin historial por época).
     """
     experiments = {experiment.name: experiment for experiment in build_experiments()}
     punctuation, capitalization = preprocess_dataset(punctuation_size, capitalization_size, window)
@@ -164,18 +177,54 @@ def reevaluate_run(run_dir: Path, capitalization_size: int, punctuation_size: in
         "window": vars(window) if window else None,
         "reevaluated": True,
     }
-    report: Report = {"config": config, "problems": {}}
     for dataset, problem in [(capitalization, CapitalizationProblem()), (punctuation, PunctuationProblem())]:
-        development, control = split_dataset_dev_control(dataset)
-        _, test = split_train_test(development)
-        loaders = {"test": build_loader(test, shuffle=False), "control": build_loader(control, shuffle=False)}
-        problem_name = type(problem).__name__
-        models = {}
-        for path in available_models(run_dir / problem_name):
-            if (model_report := _reevaluate_model(path, problem, experiments, loaders)) is not None:
-                models[model_name(path)] = model_report
-        report["problems"][problem_name] = models
-    return report
+        own = [folder for folder in folders if load_metadata(folder)["problem"] == type(problem).__name__]
+        if own:
+            loaders = _test_control_loaders(dataset)
+            for folder in own:
+                _reevaluate_folder(folder, problem, experiments, loaders, config)
+
+
+def _test_control_loaders(dataset: Dataset) -> dict[str, DataLoader]:
+    """Arma los loaders de test y control con los mismos splits del pipeline.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Todas las instancias del problema.
+
+    Returns
+    -------
+    dict[str, DataLoader]
+        ``{"test": ..., "control": ...}``.
+    """
+    development, control = split_dataset_dev_control(dataset)
+    _, test = split_train_test(development)
+    return {"test": build_loader(test, shuffle=False), "control": build_loader(control, shuffle=False)}
+
+
+def _reevaluate_folder(
+    folder: Path, problem: Problem, experiments: dict[str, Experiment], loaders: dict[str, DataLoader], config: Report
+) -> None:
+    """Reevalúa el modelo de una carpeta y guarda sus métricas en su metadata.
+
+    Parameters
+    ----------
+    folder : Path
+        Carpeta del modelo.
+    problem : Problem
+        Problema del modelo.
+    experiments : dict[str, Experiment]
+        Experimentos por nombre, para saber cómo evaluarlo.
+    loaders : dict[str, DataLoader]
+        Loaders de test y control.
+    config : Report
+        Config a guardar si la metadata no tiene una.
+    """
+    path = next(path for path in folder.iterdir() if path.suffix in (".pkl", ".joblib"))
+    if (results := _reevaluate_model(path, problem, experiments, loaders)) is not None:
+        metadata = load_metadata(folder)
+        save_metadata(folder, {**metadata, **results, "config": metadata.get("config") or config})
 
 
 def _reevaluate_model(

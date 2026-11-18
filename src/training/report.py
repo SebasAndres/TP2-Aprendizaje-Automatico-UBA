@@ -1,7 +1,13 @@
-"""Reporte de una corrida del pipeline: `models/<día>__<hora>/metrics.json`.
+"""Metadata de cada modelo y reporte de una corrida del pipeline.
 
-Guarda como datos (no solo como gráficos) todo lo necesario para comparar los modelos después,
-por ejemplo desde notebooks/poster.ipynb:
+Cada modelo guarda su ``metadata.json`` en ``models/runs/<Problema>/<score>__<modelo>/``:
+
+    {"run": "2026-11-18__04-38-20", "problem": "PunctuationProblem", "model": "joint_conv_bilstm",
+     "config": {...}, "data": {...},          # config de la corrida y tamaños de los splits del problema
+     "test": {...}, "control": {...}, "best_epoch": 18, "history": [...]}
+
+``run_report`` / ``load_report`` juntan esas metadatas en el reporte de una corrida (o de varias),
+con el formato que usan los gráficos, por ejemplo desde notebooks/poster.ipynb:
 
     {
       "config": {...},                         # tamaños, ventana, hiperparámetros
@@ -31,12 +37,17 @@ from typing import Any
 from sklearn.metrics import confusion_matrix
 from torch.utils.data import Dataset
 
+from src.constants import RUNS_DIR
 from src.data import split_dataset_dev_control, split_train_test
 from src.data.samples import Sample
 from src.metrics.base import WordLevelTask, macro_f1
 from src.training.result import TrainResult
 
 REPORT_FILE = "metrics.json"
+METADATA_FILE = "metadata.json"
+RESULT_KEYS = ("test", "control", "best_epoch", "history")
+
+Report = dict[str, Any]
 
 
 def task_report(task: WordLevelTask) -> dict[str, Any]:
@@ -153,3 +164,174 @@ def save_report(run_dir: Path, report: dict[str, Any]) -> Path:
     path = run_dir / REPORT_FILE
     path.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     return path
+
+
+def model_metadata(run: str, problem: str, model: str, report: Report) -> Report:
+    """Arma la metadata de un modelo a partir del reporte de su corrida.
+
+    Parameters
+    ----------
+    run : str
+        Corrida, ej: ``'2026-11-18__04-38-20'``.
+    problem : str
+        Nombre del problema.
+    model : str
+        Nombre del experimento.
+    report : Report
+        Reporte de la corrida, con ``"config"``, ``"data"`` y ``"problems"``.
+
+    Returns
+    -------
+    Report
+        ``{"run", "problem", "model", "config", "data", "test", "control", "best_epoch", "history"}``.
+    """
+    results = report["problems"][problem][model]
+    return {
+        "run": run,
+        "problem": problem,
+        "model": model,
+        "config": report["config"],
+        "data": report["data"].get(problem),
+        **{key: results.get(key) for key in RESULT_KEYS},
+    }
+
+
+def save_metadata(model_dir: Path, metadata: Report) -> Path:
+    """Escribe ``model_dir/metadata.json``.
+
+    Parameters
+    ----------
+    model_dir : Path
+        Carpeta del modelo.
+    metadata : Report
+        Metadata del modelo (ver ``model_metadata``).
+
+    Returns
+    -------
+    Path
+        Path del archivo escrito.
+    """
+    path = model_dir / METADATA_FILE
+    path.write_text(json.dumps(metadata, ensure_ascii=False, indent=1), encoding="utf-8")
+    return path
+
+
+def load_metadata(model_dir: Path) -> Report:
+    """Lee ``model_dir/metadata.json``.
+
+    Parameters
+    ----------
+    model_dir : Path
+        Carpeta del modelo.
+
+    Returns
+    -------
+    Report
+        Metadata del modelo.
+    """
+    return json.loads((Path(model_dir) / METADATA_FILE).read_text(encoding="utf-8"))
+
+
+def model_dirs(runs_dir: str | Path = RUNS_DIR) -> list[Path]:
+    """Lista las carpetas de modelos: ``runs_dir/<Problema>/<score>__<modelo>/``.
+
+    Parameters
+    ----------
+    runs_dir : str or Path, default=RUNS_DIR
+        Carpeta con los modelos.
+
+    Returns
+    -------
+    list[Path]
+        Las carpetas que tienen ``metadata.json``, ordenadas.
+    """
+    return sorted(path.parent for path in Path(runs_dir).glob(f"*/*/{METADATA_FILE}"))
+
+
+def list_runs(runs_dir: str | Path = RUNS_DIR) -> list[str]:
+    """Lista las corridas que tienen algún modelo guardado.
+
+    Parameters
+    ----------
+    runs_dir : str or Path, default=RUNS_DIR
+        Carpeta con los modelos.
+
+    Returns
+    -------
+    list[str]
+        Las corridas, ordenadas (las ``<día>__<hora>`` quedan de la más vieja a la más nueva).
+    """
+    return sorted({load_metadata(folder)["run"] for folder in model_dirs(runs_dir)})
+
+
+def run_models(run: str, runs_dir: str | Path = RUNS_DIR) -> list[Path]:
+    """Busca las carpetas de los modelos de una corrida.
+
+    Parameters
+    ----------
+    run : str
+        Corrida, ej: ``'2026-11-18__04-38-20'``.
+    runs_dir : str or Path, default=RUNS_DIR
+        Carpeta con los modelos.
+
+    Returns
+    -------
+    list[Path]
+        Las carpetas de sus modelos.
+    """
+    return [folder for folder in model_dirs(runs_dir) if load_metadata(folder)["run"] == run]
+
+
+def load_report(folders: list[Path]) -> Report:
+    """Junta la metadata de varios modelos en un reporte con el formato de una corrida.
+
+    La config es la del primer modelo. Si los modelos vienen de más de una corrida,
+    ``config["merged_from"]`` dice de cuáles.
+
+    Parameters
+    ----------
+    folders : list[Path]
+        Carpetas de los modelos.
+
+    Returns
+    -------
+    Report
+        ``{"config", "data", "problems": {problema: {modelo: {"test", "control", ...}}}}``.
+    """
+    metadatas = [load_metadata(folder) for folder in folders]
+    report: Report = {"config": dict(metadatas[0]["config"] or {}), "data": {}, "problems": {}}
+    runs = list(dict.fromkeys(metadata["run"] for metadata in metadatas))
+    if len(runs) > 1:
+        report["config"]["merged_from"] = runs
+    for metadata in metadatas:
+        if metadata.get("data"):
+            report["data"][metadata["problem"]] = metadata["data"]
+        results = {key: metadata.get(key) for key in RESULT_KEYS}
+        report["problems"].setdefault(metadata["problem"], {})[metadata["model"]] = results
+    return report
+
+
+def run_report(run: str, runs_dir: str | Path = RUNS_DIR) -> Report:
+    """Arma el reporte de una corrida con la metadata de sus modelos.
+
+    Parameters
+    ----------
+    run : str
+        Corrida, ej: ``'2026-11-18__04-38-20'``.
+    runs_dir : str or Path, default=RUNS_DIR
+        Carpeta con los modelos.
+
+    Returns
+    -------
+    Report
+        El reporte (ver ``load_report``).
+
+    Raises
+    ------
+    FileNotFoundError
+        Si la corrida no tiene modelos.
+    """
+    folders = run_models(run, runs_dir)
+    if not folders:
+        raise FileNotFoundError(f"No hay modelos de la corrida {run} en {runs_dir}/")
+    return load_report(folders)

@@ -1,12 +1,11 @@
 """Gráficos comparativos de los modelos del candidato final (ver candidato_final_resultados.ipynb).
 
-El candidato final se entrenó con una corrida del pipeline por modelo, así que cada uno quedó
-en su carpeta. `merge_runs` los junta en un solo reporte con el formato de
+El candidato final se entrenó con una corrida del pipeline por modelo. `merge_runs` junta la
+metadata de los modelos de esas corridas (models/runs/<Problema>/<score>__<modelo>/) en un solo reporte con el formato de
 `src/training/report.py`, y el resto de las funciones dibuja a partir de ese reporte. Usa la
 paleta y el estilo de `src/poster/plots.py` para que los gráficos combinen con los del póster.
 """
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +16,7 @@ from matplotlib.figure import Figure
 
 from src.poster import plots as P
 from src.training.plots import SERIES_COLORS, SURFACE, TEXT_PRIMARY, TEXT_SECONDARY
+from src.training.report import load_report, run_models
 
 Report = dict[str, Any]
 Scores = dict[tuple[str, str], float]  # (modelo, tarea) -> F1 macro
@@ -24,26 +24,23 @@ Scores = dict[tuple[str, str], float]  # (modelo, tarea) -> F1 macro
 MODELS = ["joint_conv_bilstm", "bidirectional_rnn"]  # de mejor a peor en control
 
 
-def merge_runs(runs: list[Path]) -> Report:
+def merge_runs(runs: list[str]) -> Report:
     """Junta los modelos de varias corridas del pipeline en un solo reporte.
 
     Parameters
     ----------
-    runs : list[Path]
-        Carpetas de las corridas. Tienen que compartir datos y configuración.
+    runs : list[str]
+        Corridas, ej: ``["2026-11-18__04-44-00", "2026-11-18__04-38-20"]``. Tienen que
+        compartir datos y configuración.
 
     Returns
     -------
     Report
         Config y datos de la primera corrida, y los modelos de todas.
     """
-    reports = [json.loads((run / "metrics.json").read_text(encoding="utf-8")) for run in runs]
-    merged = {"config": dict(reports[0]["config"]), "data": reports[0]["data"], "problems": {}}
-    merged["config"]["merged_from"] = [run.name for run in runs]
-    for report in reports:
-        for problem, models in report["problems"].items():
-            merged["problems"].setdefault(problem, {}).update(models)
-    return merged
+    report = load_report([folder for run in runs for folder in run_models(run)])
+    report["config"]["merged_from"] = list(runs)
+    return report
 
 
 def control_scores(report: Report, split: str = "control") -> Scores:
@@ -70,7 +67,7 @@ def control_scores(report: Report, split: str = "control") -> Scores:
     }
 
 
-def best_previous(runs: list[Path], split: str = "control") -> Scores:
+def best_previous(reports: list[Report], split: str = "control") -> Scores:
     """Mejor resultado previo de cada modelo y problema, entre varias corridas.
 
     Para cada modelo y problema se queda con la corrida de mejor F1 promedio entre las tareas
@@ -78,8 +75,8 @@ def best_previous(runs: list[Path], split: str = "control") -> Scores:
 
     Parameters
     ----------
-    runs : list[Path]
-        Carpetas de las corridas previas.
+    reports : list[Report]
+        Reportes de las corridas previas (ver ``merge_runs`` y ``src.training.report.run_report``).
     split : str, default="control"
         ``"test"`` o ``"control"``.
 
@@ -90,8 +87,7 @@ def best_previous(runs: list[Path], split: str = "control") -> Scores:
     """
     best: Scores = {}
     best_mean: dict[tuple[str, str], float] = {}
-    for run in runs:
-        report = json.loads((run / "metrics.json").read_text(encoding="utf-8"))
+    for report in reports:
         for problem, models in report["problems"].items():
             for model in MODELS:
                 tasks = (models.get(model) or {}).get(split)

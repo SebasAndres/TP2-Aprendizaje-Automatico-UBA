@@ -4,7 +4,7 @@ Pide un texto, lo normaliza igual que el dataset (minúsculas y sin puntuación)
 modelos y reconstruye el texto con la capitalización y la puntuación predichas.
 
 Sin argumentos abre un menú para elegir los modelos guardados en
-models/<día>__<hora>/<Problema>/<score>__<modelo> (problema → ejecución → modelo) y probar textos:
+models/runs/<Problema>/<score>__<modelo>/ (problema → modelo) y probar textos:
 
     uv run python -m src.inference
 
@@ -14,9 +14,9 @@ Cada modelo predice solo su problema; para reconstruir todo hay que elegir uno d
 problema, o la red conjunta, que predice los dos. Los modelos también se
 pueden pasar directamente, salteando el menú de modelos:
 
-    uv run python -m src.inference -m models/2026-11-12__19-30-05/CapitalizationProblem/0.871__bidirectional_rnn.pkl \\
-                                   -m models/2026-11-12__19-30-05/PunctuationProblem/0.643__classic_embeddings.joblib
-    uv run python -m src.inference -m models/2026-11-12__19-30-05/PunctuationProblem/0.702__joint_rnn.pkl -v
+    uv run python -m src.inference -m models/runs/CapitalizationProblem/0.706__bidirectional_rnn/0.706__bidirectional_rnn.pkl \\
+                                   -m models/runs/PunctuationProblem/0.480__classic_embeddings/0.480__classic_embeddings.joblib
+    uv run python -m src.inference -m models/runs/PunctuationProblem/0.792__joint_conv_bilstm/0.792__joint_conv_bilstm.pkl -v
 
 Se usa como máximo un modelo por problema. Si falta el de un problema y el otro es la red
 conjunta, la red conjunta predice los dos.
@@ -37,7 +37,7 @@ import transformers
 from torch import nn
 from transformers import BertTokenizer
 
-from src.constants import EMBEDDINGS_MODEL, MODELS_DIR, RUN_SEPARATOR
+from src.constants import EMBEDDINGS_MODEL, RUN_SEPARATOR, RUNS_DIR
 from src.data import normalize_word
 from src.data.capitalization_dataset import LOWERCASE, MIXED, TITLE, UPPERCASE
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
@@ -57,6 +57,7 @@ from src.problem.joint import (
 from src.metrics.base import class_name
 from src.problem import CapitalizationProblem, Problem, PunctuationProblem
 from src.training.neural import predict
+from src.training.report import load_metadata
 from src.words import first_token_mask, last_token_mask, majority_by_word, token_word_ids
 
 PROBLEMS: dict[str, Problem] = {
@@ -105,7 +106,7 @@ def model_name(path: Path) -> str:
     Parameters
     ----------
     path : Path
-        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+        Archivo ``models/runs/<Problema>/<score>__<modelo>/<score>__<modelo>.<ext>``.
 
     Returns
     -------
@@ -121,7 +122,7 @@ def run_info(path: Path) -> str:
     Parameters
     ----------
     path : Path
-        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+        Archivo ``models/runs/<Problema>/<score>__<modelo>/<score>__<modelo>.<ext>``.
 
     Returns
     -------
@@ -133,35 +134,38 @@ def run_info(path: Path) -> str:
 
 
 def problem_of(path: Path) -> str:
-    """Devuelve el problema del modelo: la carpeta del archivo.
+    """Devuelve el problema del modelo: la carpeta de arriba de la del modelo.
 
     Parameters
     ----------
     path : Path
-        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+        Archivo ``models/runs/<Problema>/<score>__<modelo>/<score>__<modelo>.<ext>``.
 
     Returns
     -------
     str
         Ej: ``'CapitalizationProblem'``.
     """
-    return path.parent.name
+    return path.parent.parent.name
 
 
-def run_of(folder: Path) -> str:
-    """Devuelve la ejecución: la carpeta de arriba del problema.
+def run_of(path: Path) -> str:
+    """Devuelve la corrida del modelo, según la metadata.json de su carpeta.
 
     Parameters
     ----------
-    folder : Path
-        Carpeta ``models/<día>__<hora>/<Problema>``.
+    path : Path
+        Archivo ``models/runs/<Problema>/<score>__<modelo>/<score>__<modelo>.<ext>``.
 
     Returns
     -------
     str
-        Ej: ``'2026-11-12__19-30-05'``.
+        Ej: ``'2026-11-12__19-30-05'``; ``'?'`` si la carpeta no tiene metadata.
     """
-    return folder.parent.name
+    try:
+        return load_metadata(path.parent)["run"]
+    except FileNotFoundError:
+        return "?"
 
 
 @cache
@@ -229,7 +233,7 @@ def load_model(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextF
     Parameters
     ----------
     path : Path
-        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+        Archivo ``models/runs/<Problema>/<score>__<modelo>/<score>__<modelo>.<ext>``.
     problem : Problem
         Problema del modelo, para crear la red antes de cargar los pesos.
     name : str
@@ -255,8 +259,8 @@ def load_model(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextF
         model.load_state_dict(state)
         return model.eval(), EmbeddingsExtractor
     raise ValueError(
-        f"No reconozco {path}: se espera models/<día>__<hora>/<Problema>/<score>__<{'|'.join(NETWORKS)}>.pkl "
-        f"o models/<día>__<hora>/<Problema>/<score>__<{'|'.join(CLASSIC_EXTRACTORS)}>.joblib"
+        f"No reconozco {path}: se espera models/runs/<Problema>/<score>__<modelo>/<score>__<{'|'.join(NETWORKS)}>.pkl "
+        f"o .../<score>__<{'|'.join(CLASSIC_EXTRACTORS)}>.joblib"
     )
 
 
@@ -266,7 +270,7 @@ class LoadedModel:
     Parameters
     ----------
     path : Path
-        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+        Archivo ``models/runs/<Problema>/<score>__<modelo>/<score>__<modelo>.<ext>``.
 
     Attributes
     ----------
@@ -289,10 +293,10 @@ class LoadedModel:
         problem_name, name = problem_of(path), model_name(path)
         if problem_name not in PROBLEMS:
             raise ValueError(
-                f"No reconozco el problema de {path}: se espera models/<día>__<hora>/<{'|'.join(PROBLEMS)}>/..."
+                f"No reconozco el problema de {path}: se espera models/runs/<{'|'.join(PROBLEMS)}>/<score>__<modelo>/..."
             )
         problem = PROBLEMS[problem_name]
-        self.name = f"{run_of(path.parent)}/{problem_name}/{path.stem}"
+        self.name = f"{problem_name}/{path.stem} ({run_of(path)})"
         self.is_joint = name in JOINT_NETWORKS
         self.model, extractor_class = load_model(path, problem, name)
         self.extractor = _extractor(extractor_class)
@@ -622,8 +626,10 @@ ACTION_TEXT, ACTION_MODELS, ACTION_DETAIL, ACTION_CLEAR, ACTION_EXIT = "text", "
 CLEAR_COMMANDS = {"/limpiar", "/clear"}
 
 
-def available_runs(problem_name: str) -> list[Path]:
-    """Busca las carpetas ``models/<día>__<hora>/<Problema>`` con modelos de ese problema.
+def available_models(problem_name: str) -> list[Path]:
+    """Lista los modelos de ese problema que este script sabe cargar.
+
+    Busca en ``models/runs/<Problema>/<score>__<modelo>/``.
 
     Parameters
     ----------
@@ -633,32 +639,16 @@ def available_runs(problem_name: str) -> list[Path]:
     Returns
     -------
     list[Path]
-        Las carpetas, la ejecución más reciente primero.
-    """
-    folders = Path(MODELS_DIR).glob(f"*/{problem_name}")
-    return sorted((folder for folder in folders if available_models(folder)), reverse=True)
-
-
-def available_models(folder: Path) -> list[Path]:
-    """Lista los modelos de esa ejecución que este script sabe cargar.
-
-    Parameters
-    ----------
-    folder : Path
-        Carpeta ``models/<día>__<hora>/<Problema>``.
-
-    Returns
-    -------
-    list[Path]
-        Los modelos, el de mejor score primero.
+        Los archivos de los modelos, el de mejor score primero.
     """
     known = set(NETWORKS) | set(CLASSIC_EXTRACTORS)
     return sorted(
         (
             path
-            for path in folder.glob("*")
+            for path in (Path(RUNS_DIR) / problem_name).glob("*/*")
             if path.suffix in KIND_LABELS and path.stem.count(RUN_SEPARATOR) == 1 and model_name(path) in known
         ),
+        key=lambda path: path.name,
         reverse=True,
     )
 
@@ -669,38 +659,22 @@ def _model_choice(path: Path) -> questionary.Choice:
     Parameters
     ----------
     path : Path
-        Archivo ``models/<día>__<hora>/<Problema>/<score>__<modelo>.<ext>``.
+        Archivo ``models/runs/<Problema>/<score>__<modelo>/<score>__<modelo>.<ext>``.
 
     Returns
     -------
     questionary.Choice
-        Ej: ``'bidirectional_rnn    F1 0.871   red'`` o ``'... red · predice las 3 tareas'``.
+        Ej: ``'bidirectional_rnn    F1 0.871   red     2026-11-12__19-30-05'`` (las conjuntas
+        agregan ``· predice las 3 tareas``).
     """
     name = model_name(path)
     extra = " · predice las 3 tareas" if name in JOINT_NETWORKS else ""
-    return questionary.Choice(f"{name:<28} {run_info(path):<10} {KIND_LABELS[path.suffix]}{extra}", value=path)
-
-
-def _run_choice(folder: Path) -> questionary.Choice:
-    """Arma la opción del menú de una ejecución.
-
-    Parameters
-    ----------
-    folder : Path
-        Carpeta ``models/<día>__<hora>/<Problema>``.
-
-    Returns
-    -------
-    questionary.Choice
-        Ej: ``'2026-11-12__19-30-05   (5 modelos)'``.
-    """
-    return questionary.Choice(f"{run_of(folder)}   ({len(available_models(folder))} modelos)", value=folder)
+    kind = KIND_LABELS[path.suffix]
+    return questionary.Choice(f"{name:<28} {run_info(path):<10} {kind:<8} {run_of(path)}{extra}", value=path)
 
 
 def choose_model(problem_name: str, label: str) -> Path | str | None:
-    """Pide la ejecución y después el modelo de esa ejecución.
-
-    Desde el menú de modelos se puede volver al de ejecuciones.
+    """Pide el modelo del problema, de mejor a peor score.
 
     Parameters
     ----------
@@ -714,19 +688,9 @@ def choose_model(problem_name: str, label: str) -> Path | str | None:
     Path or str or None
         El path elegido, ``''`` si no se elige ninguno y ``None`` si se cancela.
     """
-    none, back = questionary.Choice("ninguno", value=""), questionary.Choice("← volver", value="back")
-    while True:
-        folder = questionary.select(
-            f"Ejecución de {label}:", choices=[_run_choice(f) for f in available_runs(problem_name)] + [none]
-        ).ask()
-        if not folder:  # None (Ctrl+C) o '' (ninguno)
-            return folder
-        path = questionary.select(
-            f"Modelo de {label} ({run_of(folder)}):",
-            choices=[_model_choice(p) for p in available_models(folder)] + [back],
-        ).ask()
-        if path != "back":
-            return path
+    none = questionary.Choice("ninguno", value="")
+    choices = [_model_choice(path) for path in available_models(problem_name)] + [none]
+    return questionary.select(f"Modelo de {label}:", choices=choices).ask()
 
 
 def choose_models() -> dict[str, Path] | None:
@@ -739,8 +703,8 @@ def choose_models() -> dict[str, Path] | None:
     """
     chosen = {}
     for problem_name, label in PROBLEM_LABELS.items():
-        if not available_runs(problem_name):
-            print(f"No hay modelos de {label} en {Path(MODELS_DIR)}/<día>__<hora>/{problem_name}")
+        if not available_models(problem_name):
+            print(f"No hay modelos de {label} en {Path(RUNS_DIR) / problem_name}/")
             continue
         path = choose_model(problem_name, label)
         if path is None:  # Ctrl+C
@@ -915,7 +879,7 @@ def main() -> None:
         "--model",
         action="append",
         type=Path,
-        help="path a un .pkl o .joblib en models/<día>__<hora>/<Problema>/ (uno por problema). "
+        help="path a un .pkl o .joblib en models/runs/<Problema>/<score>__<modelo>/ (uno por problema). "
         "Sin -m, se eligen desde un menú",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="mostrar la clase predicha de cada palabra")

@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 # Algunos imports solo los usan los experimentos comentados en build_experiments
-from src.constants import MODELS_DIR, RUN_SEPARATOR
+from src.constants import RUNS_DIR, RUN_SEPARATOR
 from src.data import build_loader, split_train_test
 from src.features import (
     AverageEmbeddingsExtractor,
@@ -133,52 +133,27 @@ def build_experiments() -> list[Experiment]:
     ]
 
 
-def create_run_directory() -> Path:
-    """Crea la carpeta propia de esta ejecución del pipeline: ``models/<día>__<hora>``.
+def new_run() -> str:
+    """Nombre de una corrida nueva del pipeline: ``<día>__<hora>``.
 
-    Adentro va una carpeta por problema.
-
-    Returns
-    -------
-    Path
-        Ej: ``models/2026-11-12__19-30-05``.
-    """
-    run_dir = Path(MODELS_DIR) / datetime.now().strftime(f"%Y-%m-%d{RUN_SEPARATOR}%H-%M-%S")
-    run_dir.mkdir(parents=True, exist_ok=True)
-    return run_dir
-
-
-def problem_dir(run_dir: Path, problem: Problem) -> Path:
-    """Crea la carpeta del problema dentro de la ejecución.
-
-    Parameters
-    ----------
-    run_dir : Path
-        Carpeta de la ejecución.
-    problem : Problem
-        Problema; la carpeta se llama como su clase.
+    Se guarda en la metadata de cada modelo que entrena la corrida.
 
     Returns
     -------
-    Path
-        Ej: ``models/2026-11-12__19-30-05/PunctuationProblem``.
+    str
+        Ej: ``'2026-11-12__19-30-05'``.
     """
-    model_dir = run_dir / problem.__class__.__name__
-    model_dir.mkdir(parents=True, exist_ok=True)
-    return model_dir
+    return datetime.now().strftime(f"%Y-%m-%d{RUN_SEPARATOR}%H-%M-%S")
 
 
-def _file_stem(model_dir: Path, name: str, result: TrainResult) -> Path:
+def model_stem(name: str, result: TrainResult) -> str:
     """Arma el nombre base del modelo: ``<score>__<modelo>``.
 
-    El score es el promedio del F1 macro de sus tareas. Así, ordenados por nombre, los
-    mejores modelos de la ejecución quedan al final. No usar ``with_suffix`` sobre el
-    resultado: tomaría el punto del score como extensión.
+    El score es el promedio del F1 macro de sus tareas sobre test. Así, ordenados por
+    nombre, los mejores modelos de cada problema quedan al final.
 
     Parameters
     ----------
-    model_dir : Path
-        Carpeta del problema.
     name : str
         Nombre del experimento.
     result : TrainResult
@@ -186,10 +161,38 @@ def _file_stem(model_dir: Path, name: str, result: TrainResult) -> Path:
 
     Returns
     -------
-    Path
-        Path sin extensión, ej: ``.../0.812__standard_rnn``.
+    str
+        Ej: ``'0.812__standard_rnn'``.
     """
-    return model_dir / RUN_SEPARATOR.join((f"{mean_score(result.score):.3f}", name))
+    return RUN_SEPARATOR.join((f"{mean_score(result.score):.3f}", name))
+
+
+def model_directory(problem_name: str, name: str, result: TrainResult, run: str) -> Path:
+    """Crea la carpeta del modelo: ``models/runs/<Problema>/<score>__<modelo>/``.
+
+    Si ya hay un modelo con el mismo score y nombre, se le agrega la corrida al final.
+
+    Parameters
+    ----------
+    problem_name : str
+        Nombre del problema.
+    name : str
+        Nombre del experimento.
+    result : TrainResult
+        Resultado del entrenamiento.
+    run : str
+        Corrida (ver ``new_run``).
+
+    Returns
+    -------
+    Path
+        Ej: ``models/runs/PunctuationProblem/0.812__standard_rnn``.
+    """
+    folder = Path(RUNS_DIR) / problem_name / model_stem(name, result)
+    if folder.exists():
+        folder = folder.with_name(RUN_SEPARATOR.join((folder.name, run)))
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
 
 def _with_ext(file_stem: Path, extension: str) -> Path:
@@ -198,7 +201,7 @@ def _with_ext(file_stem: Path, extension: str) -> Path:
     Parameters
     ----------
     file_stem : Path
-        Path sin extensión (ver ``_file_stem``).
+        Path sin extensión, ej: ``.../0.812__standard_rnn``.
     extension : str
         Extensión con el punto, ej: ``".pkl"``.
 
@@ -210,12 +213,13 @@ def _with_ext(file_stem: Path, extension: str) -> Path:
     return file_stem.with_name(file_stem.name + extension)
 
 
-def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_name: str) -> None:
-    """Guarda el modelo entrenado y su gráfico.
+def save_experiment(name: str, result: TrainResult, model_dir: Path, problem_name: str) -> None:
+    """Guarda en ``model_dir`` el modelo entrenado y sus gráficos sobre test.
 
-    Las redes guardan sus pesos (.pkl) y los modelos clásicos el objeto completo
-    (.joblib). El gráfico es la evolución por época si entrena por épocas, o la
-    precision/recall por clase sobre test si no (modelos clásicos).
+    Las redes guardan sus pesos (``<score>__<modelo>.pkl``) y los modelos clásicos el objeto
+    completo (``.joblib``). El gráfico es la evolución por época si entrena por épocas
+    (``train_test.png``), o la precision/recall por clase sobre test si no (``test.png``).
+    Además van sus matrices de confusión sobre test (``test_confusion.png``).
 
     Parameters
     ----------
@@ -223,30 +227,32 @@ def _save_experiment(name: str, result: TrainResult, file_stem: Path, problem_na
         Nombre del experimento.
     result : TrainResult
         Resultado del entrenamiento.
-    file_stem : Path
-        Path sin extensión donde se guardan los archivos.
+    model_dir : Path
+        Carpeta del modelo (ver ``model_directory``).
     problem_name : str
-        Nombre del problema, para el título del gráfico.
+        Nombre del problema, para el título de los gráficos.
     """
+    file_stem = model_dir / model_stem(name, result)
     if isinstance(result.model, torch.nn.Module):
         torch.save(result.model.state_dict(), _with_ext(file_stem, ".pkl"))
     elif result.model is not None:
         joblib.dump(result.model, _with_ext(file_stem, ".joblib"), compress=3)
+    title = f"{problem_name} · {name}"
     if result.history:
-        save_training_plot(
-            result.history, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (train y test)", result.best_epoch
-        )
+        save_training_plot(result.history, model_dir / "train_test.png", f"{title} (train y test)", result.best_epoch)
     elif result.test_tasks:
-        save_class_metrics_plot(result.per_class, _with_ext(file_stem, ".png"), f"{problem_name} · {name} (test)")
+        save_class_metrics_plot(result.per_class, model_dir / "test.png", f"{title} (test)")
+    if result.test_tasks:
+        save_confusion_matrices({name: result}, model_dir / "test_confusion.png", f"{title} (test)")
 
 
 def train_models(
-    development_dataset: Dataset, experiments: list[Experiment], problem: Problem, model_dir: Path
-) -> dict[str, TrainResult]:
-    """Entrena todos los experimentos sobre el dataset de desarrollo y los guarda en ``model_dir``.
+    development_dataset: Dataset, experiments: list[Experiment], problem: Problem, run: str
+) -> tuple[dict[str, TrainResult], dict[str, Path]]:
+    """Entrena todos los experimentos sobre el dataset de desarrollo y guarda cada uno en su carpeta.
 
-    Divide el desarrollo en train y test, entrena cada experimento y al final guarda las
-    matrices de confusión sobre test de todos los modelos.
+    Divide el desarrollo en train y test, entrena cada experimento y lo guarda en
+    ``models/runs/<Problema>/<score>__<modelo>/``.
 
     Parameters
     ----------
@@ -256,13 +262,13 @@ def train_models(
         Experimentos a entrenar.
     problem : Problem
         Problema a resolver.
-    model_dir : Path
-        Carpeta del problema dentro de la ejecución.
+    run : str
+        Corrida (ver ``new_run``).
 
     Returns
     -------
-    dict[str, TrainResult]
-        Resultado de cada experimento, por nombre.
+    tuple[dict[str, TrainResult], dict[str, Path]]
+        Resultado y carpeta de cada experimento, por nombre.
     """
     train_dataset, test_dataset = split_train_test(development_dataset)
     logger.info("Split: train=%d, test=%d", len(train_dataset), len(test_dataset))
@@ -270,18 +276,15 @@ def train_models(
     test_loader = build_loader(test_dataset, shuffle=False)
 
     problem_name = problem.__class__.__name__
-    results = {}
+    results, folders = {}, {}
     for experiment in experiments:
         logger.info("Entrenando modelo %s", experiment.name)
         result = experiment.trainer(train_loader, test_loader, experiment.feature_extractor, problem)
-        _save_experiment(experiment.name, result, _file_stem(model_dir, experiment.name, result), problem_name)
+        folders[experiment.name] = model_directory(problem_name, experiment.name, result, run)
+        save_experiment(experiment.name, result, folders[experiment.name], problem_name)
         logger.info("Modelo %s terminado, test: %s", experiment.name, format_score(result.score))
         results[experiment.name] = result
-
-    save_confusion_matrices(
-        results, model_dir / "confusion_matrices.png", f"{problem_name} · matrices de confusión (test)"
-    )
-    return results
+    return results, folders
 
 
 def evaluate_on_control(
@@ -289,7 +292,8 @@ def evaluate_on_control(
 ) -> TrainResult:
     """Evalúa sobre control el modelo ya entrenado del experimento.
 
-    Guarda en ``model_dir`` su precision/recall por clase y sus matrices de confusión.
+    Guarda en ``model_dir`` su precision/recall por clase (``control.png``) y sus matrices
+    de confusión (``control_confusion.png``).
 
     Parameters
     ----------
@@ -302,7 +306,7 @@ def evaluate_on_control(
     problem : Problem
         Problema del modelo.
     model_dir : Path
-        Carpeta del problema dentro de la ejecución.
+        Carpeta del modelo.
 
     Returns
     -------
@@ -314,9 +318,7 @@ def evaluate_on_control(
         result.model, experiment.evaluator(result.model, loader, experiment.feature_extractor, problem)
     )
 
-    problem_name = problem.__class__.__name__
-    file_stem = model_dir / RUN_SEPARATOR.join(("control", experiment.name))
-    title = f"{problem_name} · {experiment.name} (control)"
-    save_class_metrics_plot(control.per_class, _with_ext(file_stem, ".png"), title)
-    save_confusion_matrices({experiment.name: control}, _with_ext(file_stem, "_confusion.png"), title)
+    title = f"{problem.__class__.__name__} · {experiment.name} (control)"
+    save_class_metrics_plot(control.per_class, model_dir / "control.png", title)
+    save_confusion_matrices({experiment.name: control}, model_dir / "control_confusion.png", title)
     return control

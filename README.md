@@ -26,8 +26,8 @@ Para generar el `.csv` de predicciones del enunciado (entrada: `instancia_id,tok
 se pasa un modelo por problema, o una sola red conjunta:
 ~~~bash
 uv run python -m src.predict eval.csv -o predicciones.csv \
-    -m models/<día>__<hora>/CapitalizationProblem/<score>__bidirectional_rnn.pkl \
-    -m models/<día>__<hora>/PunctuationProblem/<score>__bidirectional_rnn.pkl
+    -m models/runs/CapitalizationProblem/0.706__bidirectional_rnn/0.706__bidirectional_rnn.pkl \
+    -m models/runs/PunctuationProblem/0.750__bidirectional_rnn/0.750__bidirectional_rnn.pkl
 ~~~
 
 ## RNN conjunta (prototipo)

@@ -137,7 +137,12 @@ def _figure(n_rows: int, n_cols: int, width: float, height: float, **kwargs: Any
 # --- Antes vs después ---
 
 
-def plot_before_after(before: Scores, after: Scores) -> Figure:
+def plot_before_after(
+    before: Scores,
+    after: Scores,
+    labels: tuple[str, str] = ("mejor previo", "candidato final"),
+    title: str = "Candidato final vs mejor corrida previa",
+) -> Figure:
     """Barras del F1 macro de cada tarea: mejor resultado previo contra el candidato final.
 
     Parameters
@@ -146,6 +151,10 @@ def plot_before_after(before: Scores, after: Scores) -> Figure:
         Mejor F1 previo por (modelo, tarea) (ver ``best_previous``).
     after : Scores
         F1 del candidato por (modelo, tarea) (ver ``control_scores``).
+    labels : tuple[str, str]
+        Leyenda de las barras de antes y de después.
+    title : str
+        Título de la figura.
 
     Returns
     -------
@@ -157,8 +166,8 @@ def plot_before_after(before: Scores, after: Scores) -> Figure:
     for ax, model in zip(axes[0], MODELS):
         prev = [before.get((model, t), np.nan) for t in P.TASKS]
         new = [after.get((model, t), np.nan) for t in P.TASKS]
-        ax.barh(y + 0.2, prev, height=0.38, color=SERIES_COLORS[7], label="mejor previo")
-        ax.barh(y - 0.2, new, height=0.38, color=SERIES_COLORS[0], label="candidato final")
+        ax.barh(y + 0.2, prev, height=0.38, color=SERIES_COLORS[7], label=labels[0])
+        ax.barh(y - 0.2, new, height=0.38, color=SERIES_COLORS[0], label=labels[1])
         for i, (a, b) in enumerate(zip(prev, new)):
             ax.text(b + 0.01, i - 0.2, f"{b:.3f}  ({b - a:+.3f})", va="center", fontsize=9, color=TEXT_PRIMARY)
             ax.text(a + 0.01, i + 0.2, f"{a:.3f}", va="center", fontsize=8, color=TEXT_SECONDARY)
@@ -168,7 +177,7 @@ def plot_before_after(before: Scores, after: Scores) -> Figure:
         ax.set_xlabel("F1 macro", color=TEXT_SECONDARY, fontsize=9)
         ax.set_title(P.label(model), loc="left", fontsize=11, color=TEXT_PRIMARY)
         P._style(ax)
-    P._title(fig, "Candidato final vs mejor corrida previa")
+    P._title(fig, title)
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, fontsize=9, loc="upper right", ncol=2)
     return fig
@@ -212,18 +221,20 @@ def _task_model(report: Report, task: str, model: str) -> Report | None:
 
 def _curve_panel(ax: Axes, report: Report, task: str) -> None:
     """Dibuja train (punteado) y test (lleno) de cada modelo en una tarea, marcando la época elegida."""
+    all_epochs: list[int] = []
     for model in MODELS:
         model_report = _task_model(report, task, model)
         if not model_report:
             continue
         epochs, train, test = task_curves(model_report, task)
+        all_epochs = max(all_epochs, epochs, key=len)  # los modelos pueden tener distinta cantidad de épocas
         color = _color(model)
         ax.plot(epochs, test, color=color, linewidth=2, marker="o", markersize=4, label=f"{P.label(model)} · test")
         ax.plot(epochs, train, color=color, linewidth=1.5, linestyle="--", label=f"{P.label(model)} · train")
         best = model_report["best_epoch"]
         ax.plot(best, test[epochs.index(best)], "o", color=color, markersize=10, markeredgecolor=SURFACE)
     P._style(ax, grid_axis="y")
-    ax.set_xticks(epochs)
+    ax.set_xticks(all_epochs)
     ax.set_xlabel("época", color=TEXT_SECONDARY)
     ax.set_title(P.TASK_LABELS[task], loc="left", fontsize=11, color=TEXT_PRIMARY)
 

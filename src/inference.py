@@ -181,6 +181,48 @@ def _extractor(extractor_class: type[TextFeatureExtractor]) -> TextFeatureExtrac
     return extractor_class()
 
 
+def head_dim_of(state: dict[str, torch.Tensor]) -> int | None:
+    """Deduce el tamaño de la capa oculta de la cabeza de una BiRNN a partir de sus pesos.
+
+    Parameters
+    ----------
+    state : dict[str, torch.Tensor]
+        Pesos guardados (``state_dict``).
+
+    Returns
+    -------
+    int or None
+        Filas de la primera capa de la cabeza no lineal, o ``None`` si la cabeza es lineal
+        (en ese caso los pesos son ``out.weight``, no ``out.0.weight``).
+    """
+    for key in ("out.0.weight", "out_ini.0.weight"):
+        if key in state:
+            return state[key].shape[0]
+    return None
+
+
+def create_network(name: str, problem: Problem, state: dict[str, torch.Tensor]) -> nn.Module:
+    """Crea la red sin entrenar con la misma arquitectura que los pesos guardados.
+
+    Parameters
+    ----------
+    name : str
+        Nombre del modelo (ver ``NETWORKS``).
+    problem : Problem
+        Problema del modelo.
+    state : dict[str, torch.Tensor]
+        Pesos guardados, para deducir la cabeza de la BiRNN (lineal o no lineal).
+
+    Returns
+    -------
+    torch.nn.Module
+        La red, lista para ``load_state_dict``.
+    """
+    if name == "bidirectional_rnn":
+        return problem.bidirectional_rnn_model(head_dim=head_dim_of(state))
+    return NETWORKS[name](problem)
+
+
 def load_model(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextFeatureExtractor]]:
     """Carga un modelo guardado y elige el extractor con el que se entrenó.
 
@@ -208,8 +250,9 @@ def load_model(path: Path, problem: Problem, name: str) -> tuple[Any, type[TextF
     if path.suffix == ".joblib" and name in CLASSIC_EXTRACTORS:
         return joblib.load(path), CLASSIC_EXTRACTORS[name]
     if path.suffix == ".pkl" and name in NETWORKS:
-        model = NETWORKS[name](problem)
-        model.load_state_dict(torch.load(path, weights_only=True, map_location="cpu"))
+        state = torch.load(path, weights_only=True, map_location="cpu")
+        model = create_network(name, problem, state)
+        model.load_state_dict(state)
         return model.eval(), EmbeddingsExtractor
     raise ValueError(
         f"No reconozco {path}: se espera models/<día>__<hora>/<Problema>/<score>__<{'|'.join(NETWORKS)}>.pkl "

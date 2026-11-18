@@ -4,6 +4,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+from src.problem.heads import output_head
 from src.constants import EMBEDDING_DIM, HIDDEN_DIM, RANDOM_SEED
 from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
 
@@ -27,12 +28,15 @@ class CapitalizationBidirectionalRNN(nn.Module):
     dropout : float, default=0.0
         Probabilidad de apagar cada valor de ``[h→_t ; h←_t]`` antes de las cabezas,
         solo durante el entrenamiento (regularización). Con 0 no se apaga nada.
+    head_dim : int or None, default=None
+        Tamaño de la capa oculta de las cabezas (ver ``src.problem.heads.output_head``):
+        ``Linear -> GELU -> Dropout -> Linear``. Con ``None``, cada cabeza es una sola ``nn.Linear``.
 
     Attributes
     ----------
     rnn : torch.nn.RNN
         Capa recurrente bidireccional.
-    out : torch.nn.Linear
+    out : torch.nn.Module
         Capa de salida de ``2 * hidden_dim`` a ``n_classes``.
 
     Notes
@@ -46,6 +50,7 @@ class CapitalizationBidirectionalRNN(nn.Module):
         hidden_dim: int = HIDDEN_DIM,
         n_classes: int = N_CAPITALIZATION_CLASSES,
         dropout: float = 0.0,
+        head_dim: int | None = None,
     ) -> None:
         super().__init__()
         # 1. Activamos la lectura en ambas direcciones
@@ -55,7 +60,8 @@ class CapitalizationBidirectionalRNN(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         # 2. Multiplicamos la entrada por 2 porque ahora concatena ambas memorias
-        self.out = nn.Linear(hidden_dim * 2, n_classes)
+        # Con head_dim, la cabeza suma una capa oculta con GELU (más no linealidad)
+        self.out = output_head(hidden_dim * 2, n_classes, head_dim, dropout)
 
     def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
         """Calcula los logits de capitalización de cada token.
@@ -82,7 +88,9 @@ class CapitalizationBidirectionalRNN(nn.Module):
         return self.out(h)
 
 
-def create_bidirectional_rnn_model(dropout: float = 0.0) -> CapitalizationBidirectionalRNN:
+def create_bidirectional_rnn_model(
+    dropout: float = 0.0, head_dim: int | None = None
+) -> CapitalizationBidirectionalRNN:
     """Crea la RNN bidireccional de capitalización, sin entrenar.
 
     Fija la semilla antes de construirla para que todas las corridas arranquen
@@ -92,6 +100,9 @@ def create_bidirectional_rnn_model(dropout: float = 0.0) -> CapitalizationBidire
     ----------
     dropout : float, default=0.0
         Probabilidad de dropout sobre la salida de la RNN (0 = sin dropout).
+    head_dim : int or None, default=None
+        Tamaño de la capa oculta de la cabeza (ver ``src.problem.heads.output_head``);
+        ``None`` = cabeza lineal.
 
     Returns
     -------
@@ -105,4 +116,4 @@ def create_bidirectional_rnn_model(dropout: float = 0.0) -> CapitalizationBidire
     True
     """
     torch.manual_seed(RANDOM_SEED)
-    return CapitalizationBidirectionalRNN(dropout=dropout)
+    return CapitalizationBidirectionalRNN(dropout=dropout, head_dim=head_dim)

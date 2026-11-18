@@ -139,6 +139,14 @@ def run_config(args: Namespace) -> dict[str, Any]:
             type(problem).__name__: problem.bidirectional_rnn_weight_decay
             for problem in (CapitalizationProblem(), PunctuationProblem())
         },
+        "bidirectional_rnn_dropout": {
+            type(problem).__name__: problem.bidirectional_rnn_dropout
+            for problem in (CapitalizationProblem(), PunctuationProblem())
+        },
+        "bidirectional_rnn_head_dim": {
+            type(problem).__name__: problem.bidirectional_rnn_head_dim
+            for problem in (CapitalizationProblem(), PunctuationProblem())
+        },
         "grad_clip_norm": neural.GRAD_CLIP_NORM,
         "class_weight_power": CLASS_WEIGHT_POWER,
         "batch_size": BATCH_SIZE,

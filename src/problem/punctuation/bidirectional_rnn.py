@@ -4,6 +4,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+from src.problem.heads import output_head
 from src.constants import EMBEDDING_DIM, HIDDEN_DIM, RANDOM_SEED
 
 
@@ -26,14 +27,17 @@ class PunctuationBidirectionalRNN(nn.Module):
     dropout : float, default=0.0
         Probabilidad de apagar cada valor de ``[h→_t ; h←_t]`` antes de las cabezas,
         solo durante el entrenamiento (regularización). Con 0 no se apaga nada.
+    head_dim : int or None, default=None
+        Tamaño de la capa oculta de las cabezas (ver ``src.problem.heads.output_head``):
+        ``Linear -> GELU -> Dropout -> Linear``. Con ``None``, cada cabeza es una sola ``nn.Linear``.
 
     Attributes
     ----------
     rnn : torch.nn.RNN
         Capa recurrente bidireccional compartida por las dos tareas.
-    out_ini : torch.nn.Linear
+    out_ini : torch.nn.Module
         Cabeza de puntuación inicial, de ``2 * hidden_dim`` a 2.
-    out_fin : torch.nn.Linear
+    out_fin : torch.nn.Module
         Cabeza de puntuación final, de ``2 * hidden_dim`` a 4.
 
     Notes
@@ -48,6 +52,7 @@ class PunctuationBidirectionalRNN(nn.Module):
         input_dim: int = EMBEDDING_DIM,
         hidden_dim: int = HIDDEN_DIM,
         dropout: float = 0.0,
+        head_dim: int | None = None,
     ) -> None:
         super().__init__()
         # 1. Activamos la lectura en ambas direcciones
@@ -57,8 +62,9 @@ class PunctuationBidirectionalRNN(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         # 2. Multiplicamos la entrada por 2 para las dos cabezas de salida
-        self.out_ini = nn.Linear(hidden_dim * 2, 2)
-        self.out_fin = nn.Linear(hidden_dim * 2, 4)
+        # Con head_dim, cada cabeza suma una capa oculta con GELU (más no linealidad)
+        self.out_ini = output_head(hidden_dim * 2, 2, head_dim, dropout)
+        self.out_fin = output_head(hidden_dim * 2, 4, head_dim, dropout)
 
     def forward(self, x: torch.Tensor, lengths: list[int]) -> torch.Tensor:
         """Calcula los logits de puntuación inicial y final de cada token.
@@ -93,7 +99,9 @@ class PunctuationBidirectionalRNN(nn.Module):
         return torch.stack([logits_ini_padded, logits_fin], dim=2)
 
 
-def create_bidirectional_rnn_model(dropout: float = 0.0) -> PunctuationBidirectionalRNN:
+def create_bidirectional_rnn_model(
+    dropout: float = 0.0, head_dim: int | None = None
+) -> PunctuationBidirectionalRNN:
     """Crea la RNN bidireccional de puntuación, sin entrenar.
 
     Fija la semilla antes de construirla para que todas las corridas arranquen
@@ -103,6 +111,9 @@ def create_bidirectional_rnn_model(dropout: float = 0.0) -> PunctuationBidirecti
     ----------
     dropout : float, default=0.0
         Probabilidad de dropout sobre la salida de la RNN (0 = sin dropout).
+    head_dim : int or None, default=None
+        Tamaño de la capa oculta de la cabeza (ver ``src.problem.heads.output_head``);
+        ``None`` = cabeza lineal.
 
     Returns
     -------
@@ -110,4 +121,4 @@ def create_bidirectional_rnn_model(dropout: float = 0.0) -> PunctuationBidirecti
         Red con las dimensiones por defecto de ``src.constants``.
     """
     torch.manual_seed(RANDOM_SEED)
-    return PunctuationBidirectionalRNN(dropout=dropout)
+    return PunctuationBidirectionalRNN(dropout=dropout, head_dim=head_dim)

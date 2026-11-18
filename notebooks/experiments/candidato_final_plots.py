@@ -374,3 +374,140 @@ def plot_confusions_side_by_side(report: Report, split: str = "control") -> Figu
             P.plot_confusion_counts(axes[row, col], title, task, counts, P.CLASS_LABELS[task])
     P._title(fig, f"Matrices de confusión ({P.SPLIT_LABELS[split]})")
     return fig
+
+
+TEXT_SCALE = 1.8  # cuánto se agranda el texto de las matrices de un solo modelo
+
+
+def enlarge_text(fig: Figure, scale: float = TEXT_SCALE) -> None:
+    """Multiplica por ``scale`` el tamaño de todo el texto de la figura y reacomoda los paneles.
+
+    Parameters
+    ----------
+    fig : Figure
+        Figura ya dibujada (con título y, si hace falta, pie).
+    scale : float, default=TEXT_SCALE
+        Factor de agrandamiento.
+    """
+    from matplotlib.text import Text
+
+    for text in fig.findobj(Text):
+        text.set_fontsize(text.get_fontsize() * scale)
+
+
+POSTER_BACKGROUND = "#ffffff"  # fondo por defecto de Google Slides, donde va el póster
+
+
+def set_background(fig: Figure, color: str = POSTER_BACKGROUND) -> None:
+    """Pinta el fondo de la figura, de los paneles y la separación entre celdas de las matrices.
+
+    Parameters
+    ----------
+    fig : Figure
+        Figura ya dibujada.
+    color : str, default=POSTER_BACKGROUND
+        Color de fondo.
+    """
+    fig.set_facecolor(color)
+    for ax in fig.axes:
+        ax.set_facecolor(color)
+        ax.grid(which="minor", color=color, linewidth=2)
+
+
+def save_poster_figure(fig: Figure, out_dir: str | Path, name: str) -> None:
+    """Guarda la figura como PNG y PDF respetando su color de fondo.
+
+    Parameters
+    ----------
+    fig : Figure
+        Figura.
+    out_dir : str or Path
+        Carpeta de salida.
+    name : str
+        Nombre del archivo, sin extensión.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_dir / f"{name}.png", dpi=200, facecolor=fig.get_facecolor())
+    fig.savefig(out_dir / f"{name}.pdf", facecolor=fig.get_facecolor())
+
+
+def plot_confusions_model(
+    report: Report, model: str, split: str = "control", text_scale: float = TEXT_SCALE
+) -> Figure:
+    """Matrices de confusión normalizadas por fila de un solo modelo, una por tarea.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte del candidato final.
+    model : str
+        Nombre del modelo (por ejemplo ``"joint_conv_bilstm"``).
+    split : str, default="control"
+        ``"test"`` o ``"control"``.
+    text_scale : float, default=TEXT_SCALE
+        Factor de agrandamiento del texto.
+
+    Returns
+    -------
+    Figure
+        Tres paneles en fila; la diagonal de cada matriz es el recall de cada clase.
+    """
+    tasks = P.model_tasks(report, split)[model]
+    fig, axes = _figure(1, len(P.TASKS), 6 * len(P.TASKS), 6, gridspec_kw={"width_ratios": [4, 2.6, 4]})
+    for ax, task in zip(axes[0], P.TASKS):
+        counts = np.array(tasks[task]["confusion"])
+        P.plot_confusion_counts(ax, P.TASK_LABELS[task], task, counts, P.CLASS_LABELS[task])
+    for ax in axes[0, 1:]:
+        ax.set_ylabel("")  # "real" solo en el primer panel
+    enlarge_text(fig, text_scale)
+    set_background(fig)
+    P._title(fig, f"Matrices de confusión · {P.label(model)} ({P.SPLIT_LABELS[split]})")
+    fig._suptitle.set_fontsize(fig._suptitle.get_fontsize() * text_scale)
+    fig.tight_layout()
+    return fig
+
+
+def plot_confusions_model_by_problem(
+    report: Report, model: str, split: str = "control", text_scale: float = TEXT_SCALE
+) -> Figure:
+    """Como ``plot_confusions_model``, pero con una fila por problema.
+
+    Arriba la capitalización (centrada) y abajo las dos tareas de puntuación.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte del candidato final.
+    model : str
+        Nombre del modelo (por ejemplo ``"joint_conv_bilstm"``).
+    split : str, default="control"
+        ``"test"`` o ``"control"``.
+    text_scale : float, default=TEXT_SCALE
+        Factor de agrandamiento del texto.
+
+    Returns
+    -------
+    Figure
+        Fila 1: capitalización. Fila 2: puntuación inicial y final.
+    """
+    tasks = P.model_tasks(report, split)[model]
+    fig = plt.figure(figsize=(12.5, 12.5), facecolor=SURFACE)
+    grid = fig.add_gridspec(2, 1, hspace=0.3)
+    top = grid[0].subgridspec(1, 3, width_ratios=[1.6, 4, 1.6])
+    bottom = grid[1].subgridspec(1, 2, width_ratios=[2.6, 4], wspace=0.35)
+    axes = {
+        "capitalizacion": fig.add_subplot(top[0, 1]),
+        "punt_inicial": fig.add_subplot(bottom[0, 0]),
+        "punt_final": fig.add_subplot(bottom[0, 1]),
+    }
+    for task, ax in axes.items():
+        counts = np.array(tasks[task]["confusion"])
+        P.plot_confusion_counts(ax, P.TASK_LABELS[task], task, counts, P.CLASS_LABELS[task])
+    axes["punt_final"].set_ylabel("")  # "real" solo en el primer panel de cada fila
+    enlarge_text(fig, text_scale)
+    set_background(fig)
+    P._title(fig, f"Matrices de confusión · {P.label(model)} ({P.SPLIT_LABELS[split]})")
+    fig._suptitle.set_fontsize(fig._suptitle.get_fontsize() * text_scale)
+    fig.tight_layout()
+    return fig

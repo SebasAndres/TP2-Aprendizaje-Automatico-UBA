@@ -581,6 +581,55 @@ def _kept_score(curve: tuple[list[int], list[float]], best_epoch: int | None) ->
     return scores[epochs.index(best_epoch)] if best_epoch else max(scores)
 
 
+def _problem_curves(report: Report, problem: str) -> dict[str, tuple[tuple[list[int], list[float]], int | None]]:
+    """Junta la curva y la época elegida de cada red del problema que tenga historial.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+    problem : str
+        Nombre del problema.
+
+    Returns
+    -------
+    dict
+        ``modelo -> ((épocas, F1), época elegida)``; vacío en corridas viejas.
+    """
+    return {m: (_test_curve(r), r.get("best_epoch")) for m, r in report["problems"][problem].items() if r.get("history")}
+
+
+def _draw_learning_curves(ax: Axes, curves: dict[str, tuple[tuple[list[int], list[float]], int | None]]) -> None:
+    """Dibuja en ``ax`` las curvas de cada red, de mejor a peor (así quedan en la leyenda).
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel donde dibujar.
+    curves : dict
+        Curvas de cada red (ver ``_problem_curves``).
+    """
+    all_epochs: set[int] = set()
+    for model in sorted(curves, key=lambda m: _kept_score(*curves[m]), reverse=True):
+        (epochs, scores), best = curves[model]
+        all_epochs.update(epochs)
+        style = _curve_style(model)
+        ax.plot(epochs, scores, linewidth=2, markersize=5, label=label(model), **style)
+        if best:  # la época con la que se quedó: el mismo marcador, más grande y con borde
+            ax.plot(
+                best,
+                scores[epochs.index(best)],
+                markersize=11,
+                linestyle="none",
+                markeredgecolor=SURFACE,
+                markeredgewidth=1.5,
+                **style,
+            )
+    _style(ax, grid_axis="y")
+    ax.set_xticks(sorted(all_epochs))  # épocas enteras
+    ax.set_xlabel("época", color=TEXT_SECONDARY)
+
+
 def plot_learning_curves(report: Report, problem: str) -> Figure | None:
     """Dibuja el F1 macro promedio en test por época de cada red.
 
@@ -599,32 +648,61 @@ def plot_learning_curves(report: Report, problem: str) -> Figure | None:
     Figure or None
         El gráfico, o ``None`` si la corrida no tiene historial (corridas viejas).
     """
-    curves = {
-        m: (_test_curve(r), r.get("best_epoch")) for m, r in report["problems"][problem].items() if r.get("history")
-    }
+    curves = _problem_curves(report, problem)
     if not curves:
         return None
     fig, ax = plt.subplots(figsize=(10, 4.2), facecolor=SURFACE)
-    for model in sorted(curves, key=lambda m: _kept_score(*curves[m]), reverse=True):  # leyenda de mejor a peor
-        (epochs, scores), best = curves[model]
-        style = _curve_style(model)
-        ax.plot(epochs, scores, linewidth=2, markersize=5, label=label(model), **style)
-        if best:  # la época con la que se quedó: el mismo marcador, más grande y con borde
-            ax.plot(
-                best,
-                scores[epochs.index(best)],
-                markersize=11,
-                linestyle="none",
-                markeredgecolor=SURFACE,
-                markeredgewidth=1.5,
-                **style,
-            )
-    _style(ax, grid_axis="y")
-    ax.set_xticks(epochs)  # épocas enteras
-    ax.set_xlabel("época", color=TEXT_SECONDARY)
+    _draw_learning_curves(ax, curves)
     ax.set_ylabel("F1 macro promedio (test)", color=TEXT_SECONDARY)
     ax.legend(frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(1.01, 1))
     _title(fig, f"Curvas de aprendizaje · {PROBLEM_LABELS.get(problem, problem)}")
+    return fig
+
+
+def plot_learning_curves_combined(report: Report) -> Figure | None:
+    """Dibuja las curvas de aprendizaje de todos los problemas, un panel por problema.
+
+    Cada red tiene el mismo color y marcador en todos los paneles, y hay una sola leyenda
+    con todas las redes, de mejor a peor según el promedio (entre los problemas en los que
+    aparece) del F1 de la época con la que se quedó.
+
+    Parameters
+    ----------
+    report : Report
+        Reporte de la corrida.
+
+    Returns
+    -------
+    Figure or None
+        El gráfico, o ``None`` si la corrida no tiene historial (corridas viejas).
+    """
+    by_problem = {p: c for p in report["problems"] if (c := _problem_curves(report, p))}
+    if not by_problem:
+        return None
+    fig, axes = plt.subplots(1, len(by_problem), figsize=(6 * len(by_problem) + 2.5, 4.4), facecolor=SURFACE,
+                             squeeze=False)
+    kept: dict[str, list[float]] = {}
+    for ax, (problem, curves) in zip(axes[0], by_problem.items()):
+        _draw_learning_curves(ax, curves)
+        ax.set_title(PROBLEM_LABELS.get(problem, problem).capitalize(), loc="left", fontsize=11, color=TEXT_PRIMARY)
+        for model, curve in curves.items():
+            kept.setdefault(model, []).append(_kept_score(*curve))
+    axes[0][0].set_ylabel("F1 macro promedio (test)", color=TEXT_SECONDARY)
+    # Una sola leyenda: un handle por red (sin repetir las que están en los dos paneles)
+    handles = {}
+    for ax in axes[0]:
+        for handle, text in zip(*ax.get_legend_handles_labels()):
+            handles.setdefault(text, handle)
+    order = sorted(kept, key=lambda m: np.mean(kept[m]), reverse=True)
+    axes[0][-1].legend(
+        [handles[label(m)] for m in order],
+        [label(m) for m in order],
+        frameon=False,
+        fontsize=9,
+        loc="upper left",
+        bbox_to_anchor=(1.01, 1),
+    )
+    _title(fig, "Curvas de aprendizaje")
     return fig
 
 

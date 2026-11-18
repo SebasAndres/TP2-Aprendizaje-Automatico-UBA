@@ -8,6 +8,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from src.constants import EMBEDDING_DIM
 from src.data.capitalization_dataset import N_CAPITALIZATION_CLASSES
 from src.data.punctuation_dataset import FINAL_LABELS, INITIAL_LABELS
+from src.problem.heads import output_head
 
 PROJECTION_DIM = 256  # tamaño de cada token después de la capa por token (proyección o convolución)
 DROPOUT = 0.3  # probabilidad de apagar cada valor durante el entrenamiento
@@ -100,31 +101,8 @@ class JointHeads(nn.Module):
 
     def __init__(self, in_dim: int, hidden_dim: int | None = None) -> None:
         super().__init__()
-        self.heads = nn.ModuleList(self._head(in_dim, n_classes, hidden_dim) for n_classes in TASK_CLASSES)
-
-    @staticmethod
-    def _head(in_dim: int, n_classes: int, hidden_dim: int | None) -> nn.Module:
-        """Crea la cabeza de una tarea.
-
-        Parameters
-        ----------
-        in_dim : int
-            Dimensión de la entrada.
-        n_classes : int
-            Cantidad de clases de la tarea.
-        hidden_dim : int or None
-            Capa oculta del MLP, o ``None`` para una sola lineal.
-
-        Returns
-        -------
-        torch.nn.Module
-            Una ``nn.Linear`` o un ``nn.Sequential``.
-        """
-        if hidden_dim is None:
-            return nn.Linear(in_dim, n_classes)
-        return nn.Sequential(
-            nn.Linear(in_dim, hidden_dim), nn.GELU(), nn.Dropout(DROPOUT), nn.Linear(hidden_dim, n_classes)
-        )
+        # La misma cabeza que la BiRNN (src/problem/heads.py), con el dropout de las conjuntas
+        self.heads = nn.ModuleList(output_head(in_dim, n_classes, hidden_dim, DROPOUT) for n_classes in TASK_CLASSES)
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
         """Aplica las 3 cabezas y apila sus logits.

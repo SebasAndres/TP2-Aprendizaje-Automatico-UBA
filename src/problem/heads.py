@@ -1,4 +1,8 @@
-"""Cabeza de salida de las RNN bidireccionales: lineal o con una capa oculta no lineal."""
+"""Cabeza de salida de las redes: lineal o con una capa oculta no lineal.
+
+La usan las RNN bidireccionales de cada problema y las cabezas por tarea de las redes
+conjuntas (``JointHeads`` en src/problem/joint/layers.py).
+"""
 
 from torch import nn
 

@@ -37,17 +37,19 @@ class PunctuationProblem(Problem):
         """
         return create_standard_rnn_model()
 
-    def bidirectional_rnn_model(self, dropout: float = 0.0) -> Any:
+    def bidirectional_rnn_model(self, dropout: float = 0.0, head_dim: int | None = None) -> Any:
         """Crea la RNN bidireccional de puntuación, sin entrenar.
 
         Parameters
         ----------
         dropout : float, default=0.0
             Probabilidad de dropout sobre la salida de la RNN.
+        head_dim : int or None, default=None
+            Capa oculta de la cabeza; ``None`` = cabeza lineal.
 
         Returns
         -------
         Any
             Ver ``create_bidirectional_rnn_model``.
         """
-        return create_bidirectional_rnn_model(dropout)
+        return create_bidirectional_rnn_model(dropout, head_dim)

@@ -82,7 +82,9 @@ def build_experiments() -> list[Experiment]:
         Experiment(
             "bidirectional_rnn",
             neural_trainer(
-                lambda problem: problem.bidirectional_rnn_model(),
+                lambda problem: problem.bidirectional_rnn_model(
+                    problem.bidirectional_rnn_dropout, problem.bidirectional_rnn_head_dim
+                ),
                 weight_decay=lambda problem: problem.bidirectional_rnn_weight_decay,
             ),
             evaluate_problem_network,

@@ -33,6 +33,26 @@ SURFACE = "#fcfcfb"
 SEQUENTIAL = LinearSegmentedColormap.from_list("blues", ["#eef4fc", "#cde2fb", "#6da7ec", "#2a78d6", "#104281"])
 
 
+def style_panel(ax: Axes, grid_axis: str = "x") -> None:
+    """Aplica grilla y ejes discretos, sin bordes de arriba ni de la derecha.
+
+    Parameters
+    ----------
+    ax : Axes
+        Panel a estilizar.
+    grid_axis : str, default="x"
+        Eje de la grilla (``"x"``, ``"y"`` o ``"both"``).
+    """
+    ax.set_facecolor(SURFACE)
+    ax.grid(axis=grid_axis, color=GRID, linewidth=0.8)
+    ax.set_axisbelow(True)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(GRID)
+    ax.tick_params(colors=TEXT_SECONDARY, labelsize=9, length=0)
+
+
 def _finish(fig: plt.Figure, title: str) -> None:
     """Pone el título general arriba a la izquierda, con su propio espacio para no pisar los paneles.
 

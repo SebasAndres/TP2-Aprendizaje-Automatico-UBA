@@ -3,6 +3,8 @@ from argparse import ArgumentParser, Namespace
 from dataclasses import asdict
 from typing import Any
 
+from torch.utils.data import Dataset
+
 from src.constants import (
     BATCH_SIZE,
     CAPITALIZATION_DATASET_SIZE,
@@ -22,28 +24,10 @@ from src.training import (
 )
 from src.training import neural
 from src.training.report import data_report, experiment_report, model_metadata, save_metadata
-from src.training.result import format_score
-from src.problem import CapitalizationProblem, PunctuationProblem
+from src.training.result import TrainResult, format_score, mean_score
+from src.problem import CapitalizationProblem, Problem, PunctuationProblem
 
 logger = logging.getLogger("src.pipeline")
-
-
-def overall_score(score: dict[str, float]) -> float:
-    """Resume el F1 de cada tarea en un número para comparar experimentos: el promedio.
-
-    Parameters
-    ----------
-    score : dict[str, float]
-        F1 macro de cada tarea.
-
-    Returns
-    -------
-    float
-        El promedio; ``-inf`` si no hay score (red sin implementar), así queda último.
-    """
-    if not score:
-        return float("-inf")
-    return sum(score.values()) / len(score)
 
 
 def parse_args() -> Namespace:
@@ -126,6 +110,7 @@ def run_config(args: Namespace) -> dict[str, Any]:
         Tamaños, ventana, épocas, learning rate, weight decay, pesos por clase, etc.
     """
     window = window_from_args(args)
+    problems = {type(problem).__name__: problem for problem in (CapitalizationProblem(), PunctuationProblem())}
     return {
         "capitalization_size": args.capitalization_size,
         "punctuation_size": args.punctuation_size,
@@ -134,18 +119,9 @@ def run_config(args: Namespace) -> dict[str, Any]:
         "n_epochs": neural.N_EPOCHS,
         "learning_rate": neural.LEARNING_RATE,
         "weight_decay": neural.WEIGHT_DECAY,  # el de las redes que no eligen el suyo
-        "bidirectional_rnn_weight_decay": {
-            type(problem).__name__: problem.bidirectional_rnn_weight_decay
-            for problem in (CapitalizationProblem(), PunctuationProblem())
-        },
-        "bidirectional_rnn_dropout": {
-            type(problem).__name__: problem.bidirectional_rnn_dropout
-            for problem in (CapitalizationProblem(), PunctuationProblem())
-        },
-        "bidirectional_rnn_head_dim": {
-            type(problem).__name__: problem.bidirectional_rnn_head_dim
-            for problem in (CapitalizationProblem(), PunctuationProblem())
-        },
+        "bidirectional_rnn_weight_decay": {name: p.bidirectional_rnn_weight_decay for name, p in problems.items()},
+        "bidirectional_rnn_dropout": {name: p.bidirectional_rnn_dropout for name, p in problems.items()},
+        "bidirectional_rnn_head_dim": {name: p.bidirectional_rnn_head_dim for name, p in problems.items()},
         "grad_clip_norm": neural.GRAD_CLIP_NORM,
         "class_weight_power": CLASS_WEIGHT_POWER,
         "batch_size": BATCH_SIZE,
@@ -154,7 +130,83 @@ def run_config(args: Namespace) -> dict[str, Any]:
     }
 
 
-if __name__ == "__main__":
+def best_experiment(results: dict[str, TrainResult]) -> str:
+    """Elige el experimento con mejor promedio del F1 macro de sus tareas.
+
+    Parameters
+    ----------
+    results : dict[str, TrainResult]
+        Resultado de cada experimento, por nombre.
+
+    Returns
+    -------
+    str
+        Nombre del mejor experimento.
+    """
+    return max(results, key=lambda name: mean_score(results[name].score))
+
+
+def run_problem(
+    dataset: Dataset, problem: Problem, experiments: list[Experiment], run: str, report: dict[str, Any]
+) -> None:
+    """Entrena, evalúa y guarda todos los experimentos de un problema.
+
+    Divide el dataset en desarrollo y control, entrena cada experimento sobre desarrollo
+    (eligiendo la época sobre test), los evalúa sobre control y guarda la metadata de cada
+    modelo en su carpeta.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Dataset completo del problema.
+    problem : Problem
+        Problema a resolver.
+    experiments : list[Experiment]
+        Experimentos a entrenar.
+    run : str
+        Corrida (ver ``new_run``).
+    report : dict[str, Any]
+        Reporte de la corrida; se le agregan los datos y los resultados del problema.
+    """
+    problem_name = type(problem).__name__
+    logger.info("Problema: %s (%d instancias)", problem_name, len(dataset))
+
+    development_set, control_set = split_dataset_dev_control(dataset)
+    report["data"][problem_name] = data_report(dataset.samples)
+    logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
+
+    experiment_results, model_dirs = train_models(development_set, experiments, problem, run)
+    # Las redes sin implementar para el problema no tienen modelo: no se comparan
+    trained = {name: result for name, result in experiment_results.items() if result.model is not None}
+    if trained:
+        best_on_test = best_experiment(trained)
+        logger.info("Mejor en test: %s (%s)", best_on_test, format_score(trained[best_on_test].score))
+
+    # Evaluamos todos los modelos sobre control: es el número honesto para comparar, porque
+    # test ya se usó para elegir la época de cada red
+    control_results = {}
+    for experiment in experiments:
+        if experiment.name not in trained:
+            continue
+        logger.info("Evaluando %s sobre control", experiment.name)
+        control_results[experiment.name] = evaluate_on_control(
+            control_set, experiment, trained[experiment.name], problem, model_dirs[experiment.name]
+        )
+
+    if control_results:  # el ganador se elige sobre control
+        winner = best_experiment(control_results)
+        logger.info("Ganador en control: %s (%s)", winner, format_score(control_results[winner].score))
+
+    report["problems"][problem_name] = {
+        name: experiment_report(result, control_results.get(name)) for name, result in experiment_results.items()
+    }
+    for name, model_dir in model_dirs.items():
+        metadata = save_metadata(model_dir, model_metadata(run, problem_name, name, report))
+        logger.info("Metadata guardada en %s", metadata)
+
+
+def main() -> None:
+    """Entrena y compara los modelos de cada problema y guarda cada uno con su metadata."""
     args = parse_args()
     neural.N_EPOCHS = args.epochs  # lo leen todas las redes al entrenar, y run_config para el reporte
 
@@ -164,10 +216,9 @@ if __name__ == "__main__":
     logger.info("Cargando experimentos")
     experiments = select_experiments(build_experiments(), args.experiments)
 
-    # Genera las instancias de torch.util.data.Dataset en base a el/los
-    # datasets descargados en local
+    # Genera los torch.utils.data.Dataset de cada problema a partir de los datasets locales
     logger.info("Preprocesando datasets")
-    (punctuation_dataset, capitalization_dataset) = preprocess_dataset(
+    punctuation_dataset, capitalization_dataset = preprocess_dataset(
         args.punctuation_size, args.capitalization_size, window_from_args(args)
     )
 
@@ -177,48 +228,15 @@ if __name__ == "__main__":
     logger.info("Corrida %s", run)
     report: dict[str, Any] = {"config": run_config(args), "data": {}, "problems": {}}
 
-    # Para cada problema
-    # obs: podría ser paralelo, no creo alcance la RAM
+    # Un problema a la vez: en paralelo probablemente no alcance la RAM
     for dataset, problem in [
         (capitalization_dataset, CapitalizationProblem()),
         (punctuation_dataset, PunctuationProblem()),
     ]:
-        logger.info("Problema: %s (%d instancias)", type(problem).__name__, len(dataset))
-
-        development_set, control_set = split_dataset_dev_control(dataset)
-        report["data"][type(problem).__name__] = data_report(dataset.samples)
-        logger.info("Split: desarrollo=%d, control=%d", len(development_set), len(control_set))
-
-        experiment_results, model_dirs = train_models(development_set, experiments, problem, run)
-
-        best_on_test = max(experiment_results, key=lambda name: overall_score(experiment_results[name].score))
-        logger.info("Mejor en test: %s (%s)", best_on_test, format_score(experiment_results[best_on_test].score))
-
-        # Evaluamos todos los modelos sobre control: es el número honesto para comparar, porque
-        # test ya se usó para elegir la época de cada red
-        control_results = {}
-        for experiment in experiments:
-            if experiment_results[experiment.name].model is None:  # red sin implementar
-                continue
-            logger.info("Evaluando %s sobre control", experiment.name)
-            control_results[experiment.name] = evaluate_on_control(
-                control_set, experiment, experiment_results[experiment.name], problem, model_dirs[experiment.name]
-            )
-        # El ganador se elige sobre control
-        if control_results:
-            winning_experiment = max(control_results, key=lambda name: overall_score(control_results[name].score))
-            logger.info(
-                "Ganador en control: %s (%s)",
-                winning_experiment,
-                format_score(control_results[winning_experiment].score),
-            )
-
-        problem_name = type(problem).__name__
-        report["problems"][problem_name] = {
-            name: experiment_report(result, control_results.get(name)) for name, result in experiment_results.items()
-        }
-        for name, model_dir in model_dirs.items():
-            metadata = save_metadata(model_dir, model_metadata(run, problem_name, name, report))
-            logger.info("Metadata guardada en %s", metadata)
+        run_problem(dataset, problem, experiments, run, report)
 
     logger.info("Pipeline finalizado")
+
+
+if __name__ == "__main__":
+    main()

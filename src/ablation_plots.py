@@ -24,7 +24,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
-from src.training.plots import GRID, SERIES_COLORS, SURFACE, TEXT_PRIMARY, TEXT_SECONDARY
+from src.training.plots import GRID, SERIES_COLORS, SURFACE, TEXT_PRIMARY, TEXT_SECONDARY, style_panel
 
 # Divergente: rojo (empeora) <- gris (igual) -> azul (mejora)
 DIVERGING = LinearSegmentedColormap.from_list("delta", ["#e34948", "#f0efec", "#2a78d6"])
@@ -57,17 +57,6 @@ def mean_f1(results: Results, model: str, config: str, eval_sets: list[str]) -> 
     return np.array(
         [np.mean([results[model, config, e, t][s] for e in eval_sets for t in tasks]) for s in seeds]
     )
-
-
-def _style(ax: Axes, grid_axis: str) -> None:
-    ax.set_facecolor(SURFACE)
-    ax.grid(axis=grid_axis, color=GRID, linewidth=0.8)
-    ax.set_axisbelow(True)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(GRID)
-    ax.tick_params(colors=TEXT_SECONDARY, labelsize=9, length=0)
 
 
 def _finish(fig: plt.Figure, title: str, subtitle: str, path: Path) -> None:
@@ -105,7 +94,7 @@ def plot_delta(mode: str, configs: list[str], models: list[str], sources: list[s
         ax.invert_yaxis()
         ax.set_title(model, loc="left", fontsize=11, color=TEXT_PRIMARY)
         ax.set_xlabel(f"Δ F1 macro vs {baseline}  (>0 = mejor)", color=TEXT_SECONDARY, fontsize=9)
-        _style(ax, "x")
+        style_panel(ax, "x")
     if len(groups) > 1:
         axes[0][-1].legend(frameon=False, fontsize=9, loc="lower right", bbox_to_anchor=(1, 1.04), ncol=2)
     n_seeds = len(mean_f1(results, models[0], baseline, ["all"]))
@@ -129,7 +118,7 @@ def plot_tasks(configs: list[str], models: list[str], results: Results, out: Pat
         ax.invert_yaxis()
         ax.set_title(task, loc="left", fontsize=11, color=TEXT_PRIMARY)
         ax.set_xlabel("F1 macro (todo eval)", color=TEXT_SECONDARY, fontsize=9)
-        _style(ax, "x")
+        style_panel(ax, "x")
     axes[-1].legend(frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(1.01, 1))
     _finish(fig, "F1 macro por tarea", "punto: media entre semillas · barra: desvío", out / "tasks.png")
 

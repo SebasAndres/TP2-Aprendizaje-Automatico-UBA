@@ -13,3 +13,4 @@
 - [Resultados CSV 📋](/competencia/predicciones.csv)
 - [Gráficos 🧪](/models/reports/)
 - [Modelos entrenados por problema](/models/runs/): nombrados por score en test y arquitectura.
+- [Documentación y decisiones](/docs/pipeline/00-intro.md)

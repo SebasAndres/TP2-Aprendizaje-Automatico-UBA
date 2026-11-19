@@ -23,6 +23,7 @@ from src.training.plots import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     plot_confusion_counts,
+    style_panel,
 )
 
 Report = dict[str, Any]
@@ -202,26 +203,6 @@ def best_model(report: Report, problem: str, split: str) -> str:
 # --- Estilo ---
 
 
-def _style(ax: Axes, grid_axis: str = "x") -> None:
-    """Aplica grilla y ejes discretos, sin bordes de arriba ni de la derecha.
-
-    Parameters
-    ----------
-    ax : Axes
-        Panel a estilizar.
-    grid_axis : str, default="x"
-        Eje de la grilla (``"x"``, ``"y"`` o ``"both"``).
-    """
-    ax.set_facecolor(SURFACE)
-    ax.grid(axis=grid_axis, color=GRID, linewidth=0.8)
-    ax.set_axisbelow(True)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(GRID)
-    ax.tick_params(colors=TEXT_SECONDARY, labelsize=9, length=0)
-
-
 def _title(fig: Figure, title: str) -> None:
     """Pone el título general arriba a la izquierda (``tight_layout`` ya le reserva su lugar).
 
@@ -360,7 +341,7 @@ def plot_f1_by_task(report: Report, split: str) -> Figure:
         ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=8, color=TEXT_SECONDARY)
         ax.set_xlim(0, 1.08)
         ax.set_title(TASK_LABELS[task], loc="left", fontsize=11, color=TEXT_PRIMARY)
-        _style(ax)
+        style_panel(ax)
     axes[0].set_yticks(range(len(models)), [label(m) for m in models], fontsize=9)
     _title(fig, f"F1 macro por tarea ({SPLIT_LABELS[split]})")
     return fig
@@ -482,7 +463,7 @@ def _pair_panel(ax: Axes, tasks_by_model: ModelTasks, pair: tuple[str, str]) -> 
         bars = ax.bar(x + offset, np.nan_to_num(values), width - 0.04, color=SERIES_COLORS[k], label=label(model))
         ax.bar_label(bars, fmt="%.2f", padding=2, fontsize=7, color=TEXT_SECONDARY)
     ax.set_ylim(0, 1.12)
-    _style(ax, grid_axis="y")
+    style_panel(ax, grid_axis="y")
     _class_axis(ax, separator=GRID, separator_width=1)
     ax.set_xlim(-0.6, len(x) - 0.4)
     ax.set_ylabel("F1", color=TEXT_SECONDARY)
@@ -625,7 +606,7 @@ def _draw_learning_curves(ax: Axes, curves: dict[str, tuple[tuple[list[int], lis
                 markeredgewidth=1.5,
                 **style,
             )
-    _style(ax, grid_axis="y")
+    style_panel(ax, grid_axis="y")
     ax.set_xticks(sorted(all_epochs))  # épocas enteras
     ax.set_xlabel("época", color=TEXT_SECONDARY)
 

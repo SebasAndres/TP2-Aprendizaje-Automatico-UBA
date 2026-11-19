@@ -62,6 +62,17 @@ Evaluator = Callable[[Any, DataLoader, TextFeatureExtractor, Problem], dict[str,
 """Firma que espera `Experiment.evaluator`: predice con un modelo ya entrenado"""
 
 
+def _device() -> torch.device:
+    """Elige la GPU si hay una disponible, si no la CPU.
+
+    Returns
+    -------
+    torch.device
+        ``cuda`` o ``cpu``.
+    """
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 class PredictionLog:
     """Acumula predicciones y etiquetas por token, sin padding, para calcular métricas.
 
@@ -520,7 +531,7 @@ def train_neural_model(
     """
     n_epochs = n_epochs or N_EPOCHS
     weight_decay = WEIGHT_DECAY if weight_decay is None else weight_decay
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = _device()
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=weight_decay)
     n_params = sum(p.numel() for p in model.parameters())
@@ -603,7 +614,7 @@ def evaluate_neural_model(
     dict[str, WordLevelTask]
         Clases reales y predichas a nivel palabra de cada tarea.
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = _device()
     tasks = _evaluate(model.to(device), loader, feature_extractor, metric, device)
     model.cpu()
     return tasks

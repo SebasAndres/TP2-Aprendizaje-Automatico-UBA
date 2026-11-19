@@ -15,7 +15,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from src.poster import plots as P
-from src.training.plots import SERIES_COLORS, SURFACE, TEXT_PRIMARY, TEXT_SECONDARY
+from src.training.plots import SERIES_COLORS, SURFACE, TEXT_PRIMARY, TEXT_SECONDARY, style_panel
 from src.training.report import load_report, run_models
 
 Report = dict[str, Any]
@@ -172,7 +172,7 @@ def plot_before_after(
         ax.set_xlim(0, 1.05)
         ax.set_xlabel("F1 macro", color=TEXT_SECONDARY, fontsize=9)
         ax.set_title(P.label(model), loc="left", fontsize=11, color=TEXT_PRIMARY)
-        P._style(ax)
+        style_panel(ax)
     P._title(fig, title)
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, frameon=False, fontsize=9, loc="upper right", ncol=2)
@@ -229,7 +229,7 @@ def _curve_panel(ax: Axes, report: Report, task: str) -> None:
         ax.plot(epochs, train, color=color, linewidth=1.5, linestyle="--", label=f"{P.label(model)} · train")
         best = model_report["best_epoch"]
         ax.plot(best, test[epochs.index(best)], "o", color=color, markersize=10, markeredgecolor=SURFACE)
-    P._style(ax, grid_axis="y")
+    style_panel(ax, grid_axis="y")
     ax.set_xticks(all_epochs)
     ax.set_xlabel("época", color=TEXT_SECONDARY)
     ax.set_title(P.TASK_LABELS[task], loc="left", fontsize=11, color=TEXT_PRIMARY)
@@ -295,7 +295,7 @@ def plot_loss_curves(report: Report) -> Figure:
         ax.plot(epochs, [h["loss"] for h in history], color=SERIES_COLORS[0], linestyle="--", label="train")
         ax.plot(epochs, [h["test_loss"] for h in history], color=SERIES_COLORS[1], marker="o", label="test")
         ax.axvline(model_report["best_epoch"], color=TEXT_SECONDARY, linewidth=0.8, linestyle=":")
-        P._style(ax, grid_axis="y")
+        style_panel(ax, grid_axis="y")
         ax.set_xticks(epochs)
         ax.set_xlabel("época", color=TEXT_SECONDARY)
         ax.set_title(name, loc="left", fontsize=11, color=TEXT_PRIMARY)
@@ -322,7 +322,7 @@ def _pr_panel(ax: Axes, tasks_by_model: P.ModelTasks, task: str) -> None:
                edgecolor=SURFACE, label=f"{P.label(model)} · recall")
     ax.set_xticks(x, names)
     ax.set_ylim(0, 1.05)
-    P._style(ax, grid_axis="y")
+    style_panel(ax, grid_axis="y")
     ax.set_title(P.TASK_LABELS[task], loc="left", fontsize=11, color=TEXT_PRIMARY)
 
 
